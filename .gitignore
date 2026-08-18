@@ -1,0 +1,42 @@
+# 개인 접속 정보와 로컬 환경 파일
+참가팀 서버 접속 정보, IP, ID 2026.xlsx
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# 문서 변환 과정에서 생성된 임시 파일
+tmp/
+
+# 개인 학습용 강의 자료(재배포 금지 및 대용량 파일)
+Cadence_무료강의/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Verilog 시뮬레이션 산출물
+*.vcd
+*.fst
+*.fsdb
+*.wdb
+*.shm/
+xcelium.d/
+INCA_libs/
+work/
+
+# 합성 및 배치·배선 도구의 로컬 산출물
+.Xil/
+*.jou
+*.pb
+*.rpt.tmp
+genus_work/
+innovus_work/
+
+# 운영체제 및 편집기
+.DS_Store
+Thumbs.db
+*.swp
+*~
