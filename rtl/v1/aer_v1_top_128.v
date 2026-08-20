@@ -7,7 +7,8 @@ module aer_v1_top #(
     parameter integer SENSOR_ROWS      = 128,
     parameter integer SENSOR_COLS      = 128,
     parameter integer REGION_BANK_ROWS = 4,
-    parameter integer REGION_BANK_COLS = 4
+    parameter integer REGION_BANK_COLS = 4,
+    parameter integer ENABLE_BINNING   = 1
 ) (
     input  wire                                                   clk,
     input  wire                                                   rst_n,
@@ -48,7 +49,8 @@ module aer_v1_top #(
 
             aer_bank_row_reader #(
                 .BANK_ID(bank_gen),
-                .EXTENDED_BANK_ID(USE_EXTENDED_BANK_ID)
+                .EXTENDED_BANK_ID(USE_EXTENDED_BANK_ID),
+                .ENABLE_BINNING(ENABLE_BINNING)
             ) bank_i (
                 .clk           (clk),
                 .rst_n         (rst_n),
@@ -102,7 +104,9 @@ module aer_v1_top #(
 endmodule
 
 // Source-compatible wrapper for the original fixed-size top.
-module aer_v1_top_128 (
+module aer_v1_top_128 #(
+    parameter integer ENABLE_BINNING = 1
+) (
     input  wire          clk,
     input  wire          rst_n,
     input  wire [4095:0] tile_in_valid,
@@ -119,7 +123,8 @@ module aer_v1_top_128 (
         .SENSOR_ROWS(128),
         .SENSOR_COLS(128),
         .REGION_BANK_ROWS(4),
-        .REGION_BANK_COLS(4)
+        .REGION_BANK_COLS(4),
+        .ENABLE_BINNING(ENABLE_BINNING)
     ) parameterized_top_i (
         .clk           (clk),
         .rst_n         (rst_n),

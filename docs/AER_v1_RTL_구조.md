@@ -38,6 +38,8 @@
 
 ## 3. 타일 인코딩 조건
 
+`aer_tile_bitmap_encoder`의 `ENABLE_BINNING`으로 두 비교 모드를 만든다. 적응형은 `1`, 무비닝 RAW8 기준선은 `0`이다. 자세한 공통 조건은 [AER v1 공정 비교 규약](AER_v1_공정비교_규약.md)에 고정한다.
+
 | 조건 | 형식 | 보존 정보 |
 |---|---|---|
 | ON 또는 OFF 네 개가 모두 1 | `BIN4` | 극성과 네 픽셀 전체 발생 |
@@ -129,6 +131,7 @@ flat_id   = bank_id × 16 + local_id
 - `rtl/v1/aer_bank_row_reader.v`: BIN 쌍 패킹을 포함한 4×4 타일 뱅크
 - `rtl/v1/aer_global_bank_selector.v`: 균형 selector tree 래퍼
 - `rtl/v1/aer_v1_top_128.v`: 크기 가변 `aer_v1_top`과 128×128 호환 래퍼
+- `rtl/v1/aer_v1_raw_top_128.v`: 같은 core를 사용하는 무비닝 RAW8 기준 top
 - `tb/v1/`: 단위 시험과 전체 연결 시험
 - `scripts/run_v1_xsim.ps1`: 로컬 Vivado XSim 기능 시뮬레이션
 - `scripts/run_v1_xcelium.sh`: 서버 Xcelium 기능 시뮬레이션
@@ -152,5 +155,8 @@ flat_id   = bank_id × 16 + local_id
 - 16비트 확장 뱅크 주소
 - 24×40 센서, 3×5 뱅크, 3단 selector의 비정규 배열 생성
 - 128×128 전체 연결에서 한 이벤트의 3워드 패킷 출력
+- 적응형과 무비닝 encoder의 허용된 DATA 차이
+- 공통 계층에서 적응형 BIN 패킹과 무비닝 RAW8의 출력 워드 수 비교
+- 무비닝 128×128 top의 RAW8 출력
 
 이번 단계에서는 합성을 실행하거나 PPA 수치를 주장하지 않는다.

@@ -41,8 +41,11 @@ sh scripts/check_yosys.sh
 2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만듭니다. 센서 행·열 크기에 따라 뱅크 배열과 공간 selector 단계 수를 자동으로 계산하며, 각 selector의 fan-in은 기본 4×4 하위 블록으로 제한합니다. 선택된 패킷은 마지막 워드까지 유지하고, 각 단계의 2-entry FIFO와 look-ahead grant로 연속 전송을 지원합니다. 한 행의 BIN4 토큰은 두 개씩 16비트 워드에 패킹합니다.
 
 - [v1 구조와 패킷 규약](docs/AER_v1_RTL_구조.md)
+- [적응형 대 무비닝 RAW8 공정 비교 규약](docs/AER_v1_공정비교_규약.md)
 - `rtl/v1/`: Verilog-2001 RTL
 - `tb/v1/`: 타일 부호기, BIN 패킹, 균형 selector, 크기 가변 및 128×128 시험
+
+적응형 `aer_v1_top_128`과 무비닝 `aer_v1_raw_top_128`은 같은 core를 공유하며 `ENABLE_BINNING`만 다릅니다. 따라서 이후 계층이나 패킷 구조를 수정해도 두 비교군이 함께 갱신됩니다.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_v1_xsim.ps1

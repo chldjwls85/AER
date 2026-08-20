@@ -1,6 +1,8 @@
 `timescale 1ns/1ps
 
-module aer_tile_bitmap_encoder (
+module aer_tile_bitmap_encoder #(
+    parameter integer ENABLE_BINNING = 1
+) (
     input  wire [3:0] on_bitmap,
     input  wire [3:0] off_bitmap,
     output wire       has_event,
@@ -62,16 +64,18 @@ module aer_tile_bitmap_encoder (
         // flags[1] marks an ON/OFF conflict in the same pixel.
         flags   = {conflict, 1'b0};
 
-        if (!conflict && (on_full || off_full)) begin
-            format  = FORMAT_BIN4;
-            // payload[7]: 1=ON, 0=OFF. Count is implicitly four.
-            payload = {on_full, 7'b0};
-            flags   = 2'b00;
-        end else if (!conflict && (on_group3 || off_group3)) begin
-            format  = FORMAT_GROUP3;
-            // payload[7]: polarity, payload[6:5]: missing pixel index.
-            payload = {on_group3, missing_pixel, 5'b0};
-            flags   = 2'b00;
+        if (ENABLE_BINNING != 0) begin
+            if (!conflict && (on_full || off_full)) begin
+                format  = FORMAT_BIN4;
+                // payload[7]: 1=ON, 0=OFF. Count is implicitly four.
+                payload = {on_full, 7'b0};
+                flags   = 2'b00;
+            end else if (!conflict && (on_group3 || off_group3)) begin
+                format  = FORMAT_GROUP3;
+                // payload[7]: polarity, payload[6:5]: missing pixel index.
+                payload = {on_group3, missing_pixel, 5'b0};
+                flags   = 2'b00;
+            end
         end
     end
 

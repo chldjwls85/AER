@@ -18,18 +18,31 @@ run_test() {
 
     (
         cd "$project_root"
+        run_status=0
         xrun -64bit -sv \
             -top "$test_top" \
             -xmlibdirname "$test_directory/xcelium.d" \
             -l "$test_directory/xrun.log" \
             -f rtl/filelist_v1.f \
-            "$testbench"
+            "$testbench" || run_status=$?
+
+        # Each test is independently compiled.  Keep the small text log, but
+        # release the reproducible Xcelium work library before the next test.
+        xrun -64bit -clean \
+            -xmlibdirname "$test_directory/xcelium.d" \
+            -nolog -nohistory >/dev/null 2>&1 || true
+
+        return "$run_status"
     )
 }
 
 run_test tb_aer_tile_bitmap_encoder tb/v1/tb_aer_tile_bitmap_encoder.v
+run_test tb_aer_tile_bitmap_encoder_fair tb/v1/tb_aer_tile_bitmap_encoder_fair.v
 run_test tb_aer_bank_row_reader tb/v1/tb_aer_bank_row_reader.v
 run_test tb_aer_bank_row_reader_extended tb/v1/tb_aer_bank_row_reader_extended.v
+run_test tb_aer_bank_fair_pair tb/v1/tb_aer_bank_fair_pair.v
+run_test tb_aer_bank_packing_compare tb/v1/tb_aer_bank_packing_compare.v
 run_test tb_aer_global_bank_selector tb/v1/tb_aer_global_bank_selector.v
 run_test tb_aer_v1_top_param tb/v1/tb_aer_v1_top_param.v
 run_test tb_aer_v1_top_128 tb/v1/tb_aer_v1_top_128.v
+run_test tb_aer_v1_raw_top_128 tb/v1/tb_aer_v1_raw_top_128.v
