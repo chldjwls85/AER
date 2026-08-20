@@ -12,8 +12,8 @@
 | Current branch | `AER_hyeonho` |
 | Current pre-freeze SHA | `f44416f3891f3ac6a10251cb2eb75ff91a5540dc` |
 | First RTL freeze SHA | `f37ed043832424e18105d34fd81f29842d330c49` |
-| Evaluated RTL basis | first freeze packetizer plus regression commit `a089f6f` |
-| Evaluation commit SHA | recorded after `eval:` commit |
+| Evaluated RTL basis | first freeze packetizer plus regression commit `a089f6f3291c38f880f096763137accd66e5f240` |
+| Evaluation commit SHA | `34e7417c58e5a6824c7cfb12878f0da08f0dcd1a` |
 | Primary real dataset | UZH Event-Camera Dataset `shapes_rotation` |
 | CIFAR10-DVS provenance | not found in any repository ref/history or local `AI-semi` files |
 | Evaluation date | 2026-08-21 (Asia/Seoul) |
