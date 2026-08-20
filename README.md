@@ -52,6 +52,12 @@ powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1
 `bin` directory를 지정한다. 모든 test는 compile/elaboration/simulation과 PASS
 token을 확인하며 한 test라도 실패하면 non-zero로 종료한다.
 
+현재 suite는 5개 self-checking top으로 구성되며 기본 ROW/BANK format,
+timestamp 31/32 boundary, 128×128 elaboration, reset recovery, random
+backpressure, sustained four-bank contention, same-tile backpressure와 2,050건
+decoder round-trip을 검사한다. 결과는 `results/logs/regression_summary.txt`에
+남는다.
+
 ## Dataset evaluation
 
 원본 dataset은 `data/` 아래에 두며 Git에 올리지 않는다. UZH
@@ -76,7 +82,8 @@ Exact SHA와 평가일은 [REFERENCE_VERSIONS.md](docs/REFERENCE_VERSIONS.md)에
 - tile마다 pending slot이 하나이므로 source가 `tile_in_ready`를 지켜야 한다.
 - output은 16-bit single global link라 지속적인 overload를 제거하지 못한다.
 - BANK delta는 5-bit이며 31 clocks를 넘으면 ROW fallback한다.
-- timestamp wrap-around와 same-tile burst semantics는 regression에서 별도 확인한다.
+- same-tile burst는 `ready=0` backpressure로 보존하지만 source-side queue가 필요하다.
+- 16-bit timestamp wrap-around를 가로지르는 grouping은 아직 별도 검증하지 않았다.
 - PPA는 아직 측정하지 않았으며 이번 단계에서는 Cadence tool을 실행하지 않는다.
 
 Cadence 실험 가치가 정량적으로 확인될 때만 `GO for Cadence`로 동결하며,

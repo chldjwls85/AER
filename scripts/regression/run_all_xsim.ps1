@@ -11,7 +11,9 @@ $Summary = Join-Path $RootDir "results\logs\regression_summary.txt"
 $tests = @(
     @{ Top = "tb_aer_bank_packetizer"; Token = "AER_BANK_PACKETIZER_TB_PASS" },
     @{ Top = "tb_aer_top"; Token = "AER_ADAPTIVE_PACKET_TB_PASS" },
-    @{ Top = "tb_aer_top_128_smoke"; Token = "AER_128_SMOKE_PASS" }
+    @{ Top = "tb_aer_top_128_smoke"; Token = "AER_128_SMOKE_PASS" },
+    @{ Top = "tb_aer_protocol_stress"; Token = "AER_PROTOCOL_STRESS_PASS" },
+    @{ Top = "tb_aer_roundtrip_random"; Token = "AER_ROUNDTRIP_RANDOM_PASS" }
 )
 
 $lines = @(

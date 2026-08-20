@@ -11,7 +11,8 @@
 | Team second design top | `aer_v1_top_128`, `ENABLE_BINNING=1` |
 | Current branch | `AER_hyeonho` |
 | Current pre-freeze SHA | `f44416f3891f3ac6a10251cb2eb75ff91a5540dc` |
-| Current frozen SHA | pending first freeze push |
+| First RTL freeze SHA | `f37ed043832424e18105d34fd81f29842d330c49` |
+| Current evaluation SHA | updated by the final evaluation commit |
 | Primary real dataset | UZH Event-Camera Dataset `shapes_rotation` |
 | CIFAR10-DVS provenance | not found in any repository ref/history or local `AI-semi` files |
 | Evaluation date | 2026-08-21 (Asia/Seoul) |

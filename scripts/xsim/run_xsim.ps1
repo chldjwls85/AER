@@ -52,6 +52,8 @@ $testbench = switch ($Top) {
     "tb_aer_bank_packetizer" { "tb\unit\tb_aer_bank_packetizer.v" }
     "tb_aer_top" { "tb\regression\tb_aer_top.v" }
     "tb_aer_top_128_smoke" { "tb\regression\tb_aer_top_128_smoke.v" }
+    "tb_aer_protocol_stress" { "tb\regression\tb_aer_protocol_stress.v" }
+    "tb_aer_roundtrip_random" { "tb\regression\tb_aer_roundtrip_random.v" }
     default { throw "No testbench path registered for top '$Top'." }
 }
 
