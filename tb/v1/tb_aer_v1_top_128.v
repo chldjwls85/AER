@@ -76,7 +76,7 @@ module tb_aer_v1_top_128;
             $fatal(1);
         end
         if ((captured[0] !== 16'hC452) ||
-            (captured[2] !== 16'h8200) ||
+            (captured[2] !== 16'h8100) ||
             (captured_last !== 3'b100)) begin
             $display("AER_V1_TOP_FAIL words=%h,%h,%h last=%b",
                 captured[0], captured[1], captured[2], captured_last);

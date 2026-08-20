@@ -13,11 +13,22 @@ module tb_aer_global_bank_selector;
     reg          out_ready;
     wire         out_last;
 
+    reg [15:0] captured_data [0:7];
+    reg        captured_last [0:7];
+    integer    captured_cycle [0:7];
+    integer    transfer_count;
+    integer    cycle_count;
+    integer    timeout;
+    reg [15:0] held_data;
+    reg        held_last;
+
     aer_global_bank_selector #(
         .BANK_ROWS(2),
         .BANK_COLS(4),
         .ROW_INDEX_WIDTH(1),
-        .COL_INDEX_WIDTH(2)
+        .COL_INDEX_WIDTH(2),
+        .REGION_ROWS(2),
+        .REGION_COLS(2)
     ) dut (
         .clk            (clk),
         .rst_n          (rst_n),
@@ -33,31 +44,69 @@ module tb_aer_global_bank_selector;
 
     always #5 clk = ~clk;
 
-    task expect_transfer;
-        input [15:0] expected_data;
-        input        expected_last;
-        input [7:0]  expected_ready;
-        integer timeout;
-        begin
-            timeout = 0;
-            while (timeout < 40) begin
-                @(posedge clk);
-                if (out_valid && out_ready) begin
-                    if ((out_data !== expected_data) ||
-                        (out_last !== expected_last) ||
-                        (bank_ready !== expected_ready)) begin
-                        $display("GLOBAL_SELECTOR_FAIL got=%h/%b/%b expected=%h/%b/%b",
-                            out_data, out_last, bank_ready,
-                            expected_data, expected_last, expected_ready);
-                        $fatal(1);
-                    end
-                    timeout = 1000;
+    // Handshake-aware bank stream models.  A FIFO is allowed to consume a bank
+    // word before that word reaches the root output.
+    always @(posedge clk) begin
+        if (rst_n) begin
+            if (bank_valid[1] && bank_ready[1]) begin
+                if (!bank_last[1]) begin
+                    bank_data_flat[1*16 +: 16] <= 16'hA102;
+                    bank_last[1] <= 1'b1;
                 end else begin
-                    timeout = timeout + 1;
+                    bank_valid[1] <= 1'b0;
                 end
             end
-            if (timeout != 1000) begin
-                $display("GLOBAL_SELECTOR_TIMEOUT expected=%h", expected_data);
+            if (bank_valid[6] && bank_ready[6])
+                bank_valid[6] <= 1'b0;
+            if (bank_valid[0] && bank_ready[0])
+                bank_valid[0] <= 1'b0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            transfer_count = 0;
+            cycle_count = 0;
+        end else begin
+            cycle_count = cycle_count + 1;
+            if (out_valid && out_ready) begin
+                captured_data[transfer_count] = out_data;
+                captured_last[transfer_count] = out_last;
+                captured_cycle[transfer_count] = cycle_count;
+                transfer_count = transfer_count + 1;
+            end
+        end
+    end
+
+    task wait_for_transfers;
+        input integer expected_count;
+        begin
+            timeout = 0;
+            while ((transfer_count < expected_count) && (timeout < 100)) begin
+                @(posedge clk);
+                timeout = timeout + 1;
+            end
+            if (transfer_count != expected_count) begin
+                $display("GLOBAL_SELECTOR_TIMEOUT got=%0d expected=%0d",
+                    transfer_count, expected_count);
+                $fatal(1);
+            end
+        end
+    endtask
+
+    task check_transfer;
+        input integer transfer_index;
+        input [15:0] expected_data;
+        input expected_last;
+        begin
+            if ((captured_data[transfer_index] !== expected_data) ||
+                (captured_last[transfer_index] !== expected_last)) begin
+                $display("GLOBAL_SELECTOR_FAIL index=%0d got=%h/%b expected=%h/%b",
+                    transfer_index,
+                    captured_data[transfer_index],
+                    captured_last[transfer_index],
+                    expected_data,
+                    expected_last);
                 $fatal(1);
             end
         end
@@ -75,36 +124,62 @@ module tb_aer_global_bank_selector;
         @(negedge clk);
         rst_n = 1'b1;
 
-        // Bank 1 is the first non-empty bank. Bank 4 is also waiting.
+        // Bank 1 has a two-word packet.  Bank 6 is in another spatial region
+        // and waits with a one-word packet.
         bank_data_flat[1*16 +: 16] = 16'hA101;
-        bank_data_flat[4*16 +: 16] = 16'hA404;
+        bank_data_flat[6*16 +: 16] = 16'hA606;
         bank_valid[1] = 1'b1;
-        bank_valid[4] = 1'b1;
-        bank_last[1]  = 1'b0;
-        bank_last[4]  = 1'b1;
+        bank_valid[6] = 1'b1;
+        bank_last[1] = 1'b0;
+        bank_last[6] = 1'b1;
 
-        expect_transfer(16'hA101, 1'b0, 8'b0000_0010);
+        wait_for_transfers(3);
+        check_transfer(0, 16'hA101, 1'b0);
+        check_transfer(1, 16'hA102, 1'b1);
+        check_transfer(2, 16'hA606, 1'b1);
 
-        // The selector must remain locked to bank 1 until its last word.
+        if ((captured_cycle[1] != captured_cycle[0] + 1) ||
+            (captured_cycle[2] != captured_cycle[1] + 1)) begin
+            $display("GLOBAL_SELECTOR_BUBBLE_FAIL cycles=%0d,%0d,%0d",
+                captured_cycle[0], captured_cycle[1], captured_cycle[2]);
+            $fatal(1);
+        end
+
+        // The two-entry root FIFO must hold a stalled output stable while the
+        // bank-side handshake is allowed to complete independently.
         @(negedge clk);
-        bank_data_flat[1*16 +: 16] = 16'hA102;
-        bank_last[1] = 1'b1;
-        expect_transfer(16'hA102, 1'b1, 8'b0000_0010);
-
-        @(negedge clk);
-        bank_valid[1] = 1'b0;
-        // Banks 2 and 3 are empty, so row-major scan jumps to bank 4.
-        expect_transfer(16'hA404, 1'b1, 8'b0001_0000);
-
-        @(negedge clk);
-        bank_valid[4] = 1'b0;
+        out_ready = 1'b0;
         bank_data_flat[0*16 +: 16] = 16'hA000;
         bank_valid[0] = 1'b1;
-        bank_last[0]  = 1'b1;
-        // After bank 4, the circular row-major pointer wraps to bank 0.
-        expect_transfer(16'hA000, 1'b1, 8'b0000_0001);
+        bank_last[0] = 1'b1;
 
-        $display("AER_GLOBAL_BANK_SELECTOR_PASS");
+        timeout = 0;
+        while (!out_valid && (timeout < 30)) begin
+            @(posedge clk);
+            timeout = timeout + 1;
+        end
+        if (!out_valid) begin
+            $display("GLOBAL_SELECTOR_BUFFER_TIMEOUT");
+            $fatal(1);
+        end
+
+        held_data = out_data;
+        held_last = out_last;
+        repeat (3) begin
+            @(posedge clk);
+            if (!out_valid || (out_data !== held_data) || (out_last !== held_last)) begin
+                $display("GLOBAL_SELECTOR_STABILITY_FAIL got=%h/%b held=%h/%b",
+                    out_data, out_last, held_data, held_last);
+                $fatal(1);
+            end
+        end
+
+        @(negedge clk);
+        out_ready = 1'b1;
+        wait_for_transfers(4);
+        check_transfer(3, 16'hA000, 1'b1);
+
+        $display("AER_GLOBAL_BANK_SELECTOR_PASS levels=2 zero_bubble=1 fifo2=1");
         $finish;
     end
 

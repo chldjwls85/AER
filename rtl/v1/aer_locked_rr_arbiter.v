@@ -39,12 +39,15 @@ module aer_locked_rr_arbiter #(
         end
     end
 
+    // Bypass the lock register for the first word of a packet.  This keeps the
+    // grant stable once a multi-word packet starts, while removing the empty
+    // selection cycle that the original registered-only grant inserted.
     always @* begin
         grant       = {REQUESTS{1'b0}};
-        grant_valid = locked;
-        grant_index = selected_index;
-        if (locked)
-            grant[selected_index] = 1'b1;
+        grant_valid = locked || candidate_valid;
+        grant_index = locked ? selected_index : candidate_index;
+        if (grant_valid)
+            grant[grant_index] = 1'b1;
     end
 
     always @(posedge clk) begin
@@ -55,7 +58,17 @@ module aer_locked_rr_arbiter #(
         end else begin
             if (!locked && candidate_valid) begin
                 selected_index <= candidate_index;
-                locked         <= 1'b1;
+                // A one-word packet can be accepted through the look-ahead
+                // grant without ever entering the locked state.
+                if (advance) begin
+                    if (candidate_index == REQUESTS - 1)
+                        pointer <= {INDEX_WIDTH{1'b0}};
+                    else
+                        pointer <= candidate_index + 1'b1;
+                    locked <= 1'b0;
+                end else begin
+                    locked <= 1'b1;
+                end
             end else if (locked && advance) begin
                 if (selected_index == REQUESTS - 1)
                     pointer <= {INDEX_WIDTH{1'b0}};

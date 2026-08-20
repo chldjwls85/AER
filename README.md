@@ -36,16 +36,22 @@ sh scripts/check_yosys.sh
 
 초기 `rtl/aer_top.v` 계열은 RAW 계층 통신의 비교 기준선입니다. 아래 v1은 별도 경로에서 2×2 비트맵 인코딩과 행 우선 뱅크 통신을 시험합니다. 4×4 비닝, 적응형 혼잡 제어 및 메시 통신망은 후속 단계입니다.
 
-## 128×128 행·열 건너뛰기 RTL v1
+## 크기 가변형 균형 계층 RTL v1
 
-2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만들고, 16×16 뱅크 배열을 행 우선 순서로 읽는 v1 RTL을 추가했습니다. 이벤트가 없는 뱅크는 건너뛰고, 선택된 뱅크의 패킷이 끝날 때까지 선택을 유지합니다.
+2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만듭니다. 센서 행·열 크기에 따라 뱅크 배열과 공간 selector 단계 수를 자동으로 계산하며, 각 selector의 fan-in은 기본 4×4 하위 블록으로 제한합니다. 선택된 패킷은 마지막 워드까지 유지하고, 각 단계의 2-entry FIFO와 look-ahead grant로 연속 전송을 지원합니다. 한 행의 BIN4 토큰은 두 개씩 16비트 워드에 패킹합니다.
 
 - [v1 구조와 패킷 규약](docs/AER_v1_RTL_구조.md)
 - `rtl/v1/`: Verilog-2001 RTL
-- `tb/v1/`: 타일 부호기, 뱅크 읽기, 전역 선택기, 128×128 전체 시험
+- `tb/v1/`: 타일 부호기, BIN 패킹, 균형 selector, 크기 가변 및 128×128 시험
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_v1_xsim.ps1
+```
+
+Xcelium 환경에서는 다음을 실행합니다.
+
+```sh
+sh scripts/run_v1_xcelium.sh
 ```
 
 128×128 전체 시험의 전역 뱅크 선택·패킷 출력 파형을 Vivado XSim GUI에서 열려면 다음을 실행합니다.
