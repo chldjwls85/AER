@@ -65,6 +65,30 @@ decoder round-trip을 검사한다. 결과는 `results/logs/regression_summary.t
 팀 2차 설계, 현재 설계에 사용한다. 실행법과 provenance는
 [DATASET_EVALUATION.md](docs/DATASET_EVALUATION.md)에 기록한다.
 
+```powershell
+# download/checksum + 7-speed software sweep + 3-design/3-window XSim
+powershell -ExecutionPolicy Bypass -File scripts\dataset\run_all_dataset.ps1
+```
+
+공식 UZH ZIP의 SHA-256과 92,861-event crop을 자동 검증한다. XSim dataset
+단계는 pinned team commit을 ignored build directory에 export하며 현재 branch로
+merge하지 않는다.
+
+## Measured status
+
+- 기능 regression: 5/5 PASS
+- random accepted-to-decoded round-trip: 2,050/2,050
+- 실제 UZH RTL window: 9/9 compile/elaboration/simulation/round-trip PASS
+- 1000x software words/accepted-event: RAW/Team 2.9313, Current 2.8943
+  (1.26% improvement)
+- dense XSim words/accepted-transaction: RAW/Team 2.9519, Current 2.8443
+  (3.65% improvement)
+- sparse XSim: 모두 3.0000으로 동일
+
+현재 결론은 **NO-GO / More architecture work required**다. 기능은 안정적이지만
+실제 데이터 효율이 practical 10% gate에 못 미치고 accelerated-load latency가
+악화됐다. Cadence tool은 실행하지 않았다.
+
 ## Reproducibility anchors
 
 - Repository: `https://github.com/chldjwls85/AER`
@@ -84,7 +108,10 @@ Exact SHA와 평가일은 [REFERENCE_VERSIONS.md](docs/REFERENCE_VERSIONS.md)에
 - BANK delta는 5-bit이며 31 clocks를 넘으면 ROW fallback한다.
 - same-tile burst는 `ready=0` backpressure로 보존하지만 source-side queue가 필요하다.
 - 16-bit timestamp wrap-around를 가로지르는 grouping은 아직 별도 검증하지 않았다.
-- PPA는 아직 측정하지 않았으며 이번 단계에서는 Cadence tool을 실행하지 않는다.
+- single global link와 얕은 pending storage 때문에 accelerated load에서 P99
+  latency가 RAW보다 나빠질 수 있다.
+- UZH 한 dataset만 provenance가 확인됐고 CIFAR10-DVS 기존 사용 증거는 없었다.
+- PPA는 측정하지 않았으며 이번 단계에서 Cadence tool을 실행하지 않았다.
 
-Cadence 실험 가치가 정량적으로 확인될 때만 `GO for Cadence`로 동결하며,
-그 전까지 PPA 개선을 주장하지 않는다.
+다음 구조 연구가 representative traffic에서 약 10% 이상 개선을 보인 뒤에만
+Cadence handoff HOLD를 해제한다.

@@ -64,3 +64,26 @@ PASS token을 직접 확인했다. 최종 summary는 `TOTAL=5`, `PASS_COUNT=5`,
 - timestamp wrap-around 경계와 formal property proof는 아직 포함하지 않는다.
 - reset은 pending transaction을 flush하는 현재 RTL 동작을 전제로 recovery를
   검증한다. reset 중 입력 보존은 외부 system 책임이다.
+
+## Real-dataset RTL verification
+
+`tb/dataset/tb_aer_dataset.v`는 동일한 1024-cycle sparse/dense/burst vectors를
+pinned Fair RAW, pinned Team second, Current 128x128 top에 투입한다. 각 top은
+Vivado 2019.1에서 별도 compile/elaboration되며 accepted input과 output word를
+로그로 남긴다. Python decoder가 tile ID, ON/OFF bitmap, 16-bit timestamp와
+transaction multiplicity를 비교한다.
+
+| Scope | Total | PASS | FAIL |
+|---|---:|---:|---:|
+| Functional XSim tops | 5 | 5 | 0 |
+| Dataset RTL windows | 9 | 9 | 0 |
+| Dataset decoder round-trip | 9 | 9 | 0 |
+
+Dataset tokens are `AER_DATASET_XSIM_PASS`,
+`AER_DATASET_ROUNDTRIP_PASS`, and `AER_DATASET_XSIM_ALL_PASS`. Curated
+summaries are under `results/logs`; raw word logs are ignored.
+
+One evidence-driven packet-collection delay was tested. It passed all
+functional and dataset round-trips but did not reduce dense words and reduced
+accepted transactions, so it was reverted. The final RTL packetizer matches
+the first freeze exactly.

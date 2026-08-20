@@ -1,0 +1,14 @@
+{
+  "accepted_transactions": 111,
+  "decoded_transactions": 111,
+  "design": "current_adaptive",
+  "extra_transactions": 0,
+  "missing_transactions": 0,
+  "mode_counts": {
+    "BANK": 0,
+    "ROW": 111
+  },
+  "output_words": 333,
+  "roundtrip_pass": true,
+  "window": "sparse"
+}

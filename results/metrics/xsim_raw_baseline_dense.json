@@ -1,0 +1,17 @@
+{
+  "accepted_transactions": 416,
+  "decoded_transactions": 416,
+  "design": "raw_baseline",
+  "extra_transactions": 0,
+  "missing_transactions": 0,
+  "mode_counts": {
+    "BIN4": 0,
+    "BIN_PAIR_WORD": 0,
+    "GROUP3": 0,
+    "RAW8": 416,
+    "ROW": 406
+  },
+  "output_words": 1228,
+  "roundtrip_pass": true,
+  "window": "dense"
+}

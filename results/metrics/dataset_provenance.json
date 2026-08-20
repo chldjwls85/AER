@@ -1,0 +1,38 @@
+{
+  "archive_bytes": 157446920,
+  "archive_sha256": "56aade6bf53dcf73e8fe40905ccac8385cd7606bc9a85103bf2c9f9045117551",
+  "canonical_events_1000x": 92861,
+  "canonical_transactions_1000x": 92669,
+  "clock_hz": 100000000.0,
+  "crop_height": 128,
+  "crop_width": 128,
+  "crop_x": 56,
+  "crop_y": 26,
+  "cropped_source_events": 92861,
+  "dataset": "UZH shapes_rotation",
+  "events_txt_bytes": 509907771,
+  "first_source_timestamp_s": 0.0,
+  "model_scope": "packet/link cycle model; representative windows cross-checked in XSim",
+  "playback_speed": 1000.0,
+  "source_rows_read": 200000,
+  "windows": {
+    "burst": {
+      "canonical_events": 1087,
+      "cycles": 1024,
+      "start_cycle": 99648,
+      "transactions": 1085
+    },
+    "dense": {
+      "canonical_events": 1133,
+      "cycles": 1024,
+      "start_cycle": 98304,
+      "transactions": 1130
+    },
+    "sparse": {
+      "canonical_events": 111,
+      "cycles": 1024,
+      "start_cycle": 0,
+      "transactions": 111
+    }
+  }
+}

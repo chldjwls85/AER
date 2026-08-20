@@ -1,0 +1,33 @@
+{
+  "decision": "rejected_and_reverted",
+  "iteration": 1,
+  "change": "defer ST_ANALYZE decision when the same bank accepts a new tile",
+  "reason": "attempt to include consecutive-cycle bank traffic in one snapshot",
+  "software_1000x_before": {
+    "accepted_events": 47340,
+    "output_words": 137018,
+    "words_per_accepted_event": 2.8943388255
+  },
+  "software_1000x_after": {
+    "accepted_events": 47354,
+    "output_words": 136945,
+    "words_per_accepted_event": 2.8919195844
+  },
+  "xsim_dense_before": {
+    "accepted_transactions": 533,
+    "output_words": 1516
+  },
+  "xsim_dense_after": {
+    "accepted_transactions": 531,
+    "output_words": 1516
+  },
+  "xsim_burst_before": {
+    "accepted_transactions": 528,
+    "output_words": 1507
+  },
+  "xsim_burst_after": {
+    "accepted_transactions": 527,
+    "output_words": 1506
+  },
+  "final_rtl": "restored byte-for-byte to first freeze packetizer"
+}
