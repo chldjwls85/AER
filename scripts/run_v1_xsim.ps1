@@ -1,7 +1,17 @@
+param(
+    [string]$OutputRoot = ''
+)
+
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$outputRoot = Join-Path $projectRoot 'build\xsim_v1'
+$outputRoot = if (-not $OutputRoot) {
+    Join-Path $projectRoot 'build\xsim_v1'
+} elseif ([System.IO.Path]::IsPathRooted($OutputRoot)) {
+    $OutputRoot
+} else {
+    Join-Path $projectRoot $OutputRoot
+}
 
 $xvlogCommand = Get-Command xvlog -ErrorAction SilentlyContinue
 if ($xvlogCommand) {
@@ -68,6 +78,11 @@ Invoke-XsimTest 'tb_aer_tile_bitmap_encoder' @(
     'tb\v1\tb_aer_tile_bitmap_encoder.v'
 )
 
+Invoke-XsimTest 'tb_aer_tile_bitmap_encoder_fair' @(
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'tb\v1\tb_aer_tile_bitmap_encoder_fair.v'
+)
+
 Invoke-XsimTest 'tb_aer_global_bank_selector' @(
     'rtl\v1\aer_locked_rr_arbiter.v',
     'rtl\v1\aer_global_bank_selector.v',
@@ -81,6 +96,13 @@ Invoke-XsimTest 'tb_aer_bank_row_reader' @(
     'tb\v1\tb_aer_bank_row_reader.v'
 )
 
+Invoke-XsimTest 'tb_aer_bank_fair_pair' @(
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader.v',
+    'tb\v1\tb_aer_bank_fair_pair.v'
+)
+
 Invoke-XsimTest 'tb_aer_v1_top_128' @(
     'rtl\frontend\aer_timebase.v',
     'rtl\v1\aer_tile_bitmap_encoder.v',
@@ -89,4 +111,15 @@ Invoke-XsimTest 'tb_aer_v1_top_128' @(
     'rtl\v1\aer_global_bank_selector.v',
     'rtl\v1\aer_v1_top_128.v',
     'tb\v1\tb_aer_v1_top_128.v'
+)
+
+Invoke-XsimTest 'tb_aer_v1_raw_top_128' @(
+    'rtl\frontend\aer_timebase.v',
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader.v',
+    'rtl\v1\aer_global_bank_selector.v',
+    'rtl\v1\aer_v1_top_128.v',
+    'rtl\v1\aer_v1_raw_top_128.v',
+    'tb\v1\tb_aer_v1_raw_top_128.v'
 )

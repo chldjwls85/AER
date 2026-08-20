@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 module aer_bank_row_reader #(
-    parameter [7:0] BANK_ID = 8'd0
+    parameter [7:0] BANK_ID = 8'd0,
+    parameter integer ENABLE_BINNING = 1
 ) (
     input  wire          clk,
     input  wire          rst_n,
@@ -63,7 +64,9 @@ module aer_bank_row_reader #(
     genvar tile_gen;
     generate
         for (tile_gen = 0; tile_gen < 16; tile_gen = tile_gen + 1) begin : gen_encoder
-            aer_tile_bitmap_encoder encoder_i (
+            aer_tile_bitmap_encoder #(
+                .ENABLE_BINNING(ENABLE_BINNING)
+            ) encoder_i (
                 .on_bitmap  (tile_on_flat[tile_gen*4 +: 4]),
                 .off_bitmap (tile_off_flat[tile_gen*4 +: 4]),
                 .has_event  (encoded_has_event[tile_gen]),

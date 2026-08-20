@@ -41,8 +41,11 @@ sh scripts/check_yosys.sh
 2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만들고, 16×16 뱅크 배열을 행 우선 순서로 읽는 v1 RTL을 추가했습니다. 이벤트가 없는 뱅크는 건너뛰고, 선택된 뱅크의 패킷이 끝날 때까지 선택을 유지합니다.
 
 - [v1 구조와 패킷 규약](docs/AER_v1_RTL_구조.md)
+- [적응형 대 무비닝 RAW8 공정 비교 규약](docs/AER_v1_공정비교_규약.md)
 - `rtl/v1/`: Verilog-2001 RTL
 - `tb/v1/`: 타일 부호기, 뱅크 읽기, 전역 선택기, 128×128 전체 시험
+
+적응형 `aer_v1_top_128`과 무비닝 `aer_v1_raw_top_128`은 같은 core를 공유하며 `ENABLE_BINNING`만 다릅니다. 따라서 이후 계층이나 패킷 구조를 수정해도 두 비교군이 함께 갱신됩니다.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_v1_xsim.ps1
