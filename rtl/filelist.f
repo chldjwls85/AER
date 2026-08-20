@@ -1,0 +1,10 @@
+rtl/frontend/aer_timebase.v
+rtl/frontend/aer_event_capture.v
+rtl/common/aer_rr_arbiter.v
+rtl/common/aer_sync_fifo.v
+rtl/common/aer_stream_reg.v
+rtl/core/aer_raw_packetizer.v
+rtl/core/aer_tile_raw.v
+rtl/core/aer_bank.v
+rtl/core/aer_fabric.v
+rtl/aer_top.v

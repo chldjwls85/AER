@@ -17,7 +17,12 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# 다운로드한 공개 이벤트 데이터와 분석 결과
+data/
+results/
+
 # Verilog 시뮬레이션 산출물
+build/
 *.vcd
 *.fst
 *.fsdb

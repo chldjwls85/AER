@@ -1,6 +1,6 @@
 # AER 이벤트 통신 회로 설계
 
-이 저장소는 2026년 AI 반도체 회로설계 경진대회의 AER(Address-Event Representation) 연구 자료와 향후 Verilog RTL 구현을 관리합니다.
+이 저장소는 2026년 AI 반도체 회로설계 경진대회의 AER(Address-Event Representation) 연구 자료와 Verilog RTL 구현을 관리합니다.
 
 현재 1차 설계 목표는 다음과 같습니다.
 
@@ -14,11 +14,67 @@
 - 시계열 정보와 비닝 이력을 이용한 소프트웨어 복원 확장 검토
 - 처리량, 지연시간, 이벤트 손실률, 면적, 전력, 배선 비용 비교
 
-현재는 배경 조사와 구조 제안 단계이며, 검증된 RTL·합성 결과는 아직 없습니다.
+## 초기 RTL
+
+첫 기준 구현은 16×16 픽셀 배열을 16개의 4×4 타일과 4개의 뱅크로 나누고, 계층형 순환 중재를 거쳐 32비트 RAW 패킷을 출력합니다.
+
+- [초기 RTL 구조와 인터페이스](docs/초기_RTL_구조.md)
+- `rtl/`: 합성 가능한 Verilog-2001 소스
+- `tb/`: 자동 검사 시험 환경
+- `scripts/run_iverilog.ps1`: Icarus Verilog 실행 스크립트
+- `scripts/check_yosys.sh`: Yosys 계층·합성 가능성 검사
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_iverilog.ps1
+```
+
+Linux 또는 WSL에서 Yosys가 설치되어 있다면 다음 검사도 실행할 수 있습니다.
+
+```sh
+sh scripts/check_yosys.sh
+```
+
+초기 `rtl/aer_top.v` 계열은 RAW 계층 통신의 비교 기준선입니다. 아래 v1은 별도 경로에서 2×2 비트맵 인코딩과 행 우선 뱅크 통신을 시험합니다. 4×4 비닝, 적응형 혼잡 제어 및 메시 통신망은 후속 단계입니다.
+
+## 128×128 행·열 건너뛰기 RTL v1
+
+2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만들고, 16×16 뱅크 배열을 행 우선 순서로 읽는 v1 RTL을 추가했습니다. 이벤트가 없는 뱅크는 건너뛰고, 선택된 뱅크의 패킷이 끝날 때까지 선택을 유지합니다.
+
+- [v1 구조와 패킷 규약](docs/AER_v1_RTL_구조.md)
+- `rtl/v1/`: Verilog-2001 RTL
+- `tb/v1/`: 타일 부호기, 뱅크 읽기, 전역 선택기, 128×128 전체 시험
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_v1_xsim.ps1
+```
+
+128×128 전체 시험의 전역 뱅크 선택·패킷 출력 파형을 Vivado XSim GUI에서 열려면 다음을 실행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/open_v1_xsim_wave.ps1
+```
+
+## 사전 소프트웨어 검증
+
+MASK·BIN·CARE-AER RTL을 작성하기 전에 전송 정책을 비교할 수 있는 Python 기준 모델을 제공합니다.
+
+- [소프트웨어 검증 사용법](sw/README.md)
+- `sw/`: 합성 트래픽, UZH 이벤트 로더, 정책·링크 모델, 패킷 pack/unpack
+- `tests_sw/`: 자동 단위 시험
+- `scripts/run_sw_validation.ps1`: 시험과 네 합성 시나리오 일괄 실행
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_sw_validation.ps1
+~~~
+
+이 결과는 구조 탐색용이며 RTL의 클록 정확 성능이나 PPA 결과를 대신하지 않습니다.
 
 ## 주요 문서
 
 - [설계 제안서](AER_설계_제안서.md)
+- [설계 제안서 상세 부록](docs/AER_설계_부록.md)
+- [현재 구현의 기준 문서](docs/초기_RTL_구조.md)
+- [CARE-AER 소프트웨어 초기 검증 결과](docs/SW_초기_검증_결과.md)
 - [대회 오리엔테이션 정리](260723_오리엔테이션.md)
 - [1차 Q&A 정리](1차_Q&A_정리.md)
 - `Background/`: AER 관련 논문과 조사 자료

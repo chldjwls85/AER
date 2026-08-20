@@ -4,6 +4,9 @@
 *.vh text eol=lf
 *.py text eol=lf
 *.tcl text eol=lf
+*.sh text eol=lf
+*.f text eol=lf
+*.ps1 text eol=crlf
 
 # 대용량 자료는 줄 단위 차이를 만들지 않음
 *.pdf binary
