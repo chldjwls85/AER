@@ -1,81 +1,124 @@
 `timescale 1ns/1ps
-`include "aer_config.vh"
 
-module aer_top (
-    input  wire                              clk,
-    input  wire                              rst_n,
-    input  wire [`AER_NUM_PIXELS-1:0]        pixel_req_async,
-    input  wire [`AER_NUM_PIXELS-1:0]        pixel_polarity_async,
-    output wire [`AER_NUM_PIXELS-1:0]        pixel_ack,
-    output wire [`AER_PACKET_W-1:0]          event_data,
-    output wire                              event_valid,
-    input  wire                              event_ready,
-    output wire [`AER_ALL_TILE_LEVEL_W-1:0] tile_fifo_levels
+// Parameterized top-level adaptive AER readout.
+// Input ordering is bank-major for compatibility with the existing 2x2-tile
+// stimulus style: 16 tiles per 8x8-pixel bank, local tile ID = row*4 + col.
+module aer_top #(
+    parameter integer SENSOR_ROWS = 128,
+    parameter integer SENSOR_COLS = 128,
+    parameter integer MAX_BANK_DELTA = 31
+) (
+    input  wire                                                   clk,
+    input  wire                                                   rst_n,
+    input  wire [(SENSOR_ROWS/2)*(SENSOR_COLS/2)-1:0]            tile_in_valid,
+    input  wire [(SENSOR_ROWS/2)*(SENSOR_COLS/2)*4-1:0]          tile_on_flat,
+    input  wire [(SENSOR_ROWS/2)*(SENSOR_COLS/2)*4-1:0]          tile_off_flat,
+    output wire [(SENSOR_ROWS/2)*(SENSOR_COLS/2)-1:0]            tile_in_ready,
+    output wire [15:0]                                            out_data,
+    output wire                                                   out_valid,
+    input  wire                                                   out_ready,
+    output wire                                                   out_last
 );
+    localparam integer BANK_ROWS  = SENSOR_ROWS / 8;
+    localparam integer BANK_COLS  = SENSOR_COLS / 8;
+    localparam integer BANK_COUNT = BANK_ROWS * BANK_COLS;
+    localparam integer TILE_COUNT = BANK_COUNT * 16;
 
-    wire [`AER_TIME_W-1:0] time_now;
-    wire [255:0] fabric_req_async;
-    wire [255:0] fabric_polarity_async;
-    wire [255:0] fabric_ack;
+    wire [15:0] time_now;
+    wire [BANK_COUNT*16-1:0] bank_data_flat;
+    wire [BANK_COUNT-1:0] bank_valid;
+    wire [BANK_COUNT-1:0] bank_last;
+    wire [BANK_COUNT-1:0] bank_ready;
 
-    aer_timebase #(
-        .TIME_WIDTH(`AER_TIME_W)
-    ) timebase_i (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .time_now (time_now)
+    aer_timebase #(.TIME_WIDTH(16)) timebase_i (
+        .clk(clk), .rst_n(rst_n), .time_now(time_now)
     );
 
-    // Convert the external row-major pixel order into bank-major, tile-major order.
-    genvar bank_y;
-    genvar bank_x;
-    genvar tile_y;
-    genvar tile_x;
-    genvar pixel_y;
-    genvar pixel_x;
+    genvar bank_gen;
     generate
-        for (bank_y = 0; bank_y < 2; bank_y = bank_y + 1) begin : gen_bank_y
-            for (bank_x = 0; bank_x < 2; bank_x = bank_x + 1) begin : gen_bank_x
-                for (tile_y = 0; tile_y < 2; tile_y = tile_y + 1) begin : gen_tile_y
-                    for (tile_x = 0; tile_x < 2; tile_x = tile_x + 1) begin : gen_tile_x
-                        for (pixel_y = 0; pixel_y < 4; pixel_y = pixel_y + 1) begin : gen_pixel_y
-                            for (pixel_x = 0; pixel_x < 4; pixel_x = pixel_x + 1) begin : gen_pixel_x
-                                localparam integer BANK_NUMBER = bank_y * 2 + bank_x;
-                                localparam integer TILE_NUMBER = tile_y * 2 + tile_x;
-                                localparam integer LOCAL_PIXEL = pixel_y * 4 + pixel_x;
-                                localparam integer FABRIC_INDEX =
-                                    (BANK_NUMBER * 4 + TILE_NUMBER) * 16 + LOCAL_PIXEL;
-                                localparam integer SENSOR_INDEX =
-                                    (bank_y * 8 + tile_y * 4 + pixel_y) * 16 +
-                                    (bank_x * 8 + tile_x * 4 + pixel_x);
-
-                                assign fabric_req_async[FABRIC_INDEX] =
-                                    pixel_req_async[SENSOR_INDEX];
-                                assign fabric_polarity_async[FABRIC_INDEX] =
-                                    pixel_polarity_async[SENSOR_INDEX];
-                                assign pixel_ack[SENSOR_INDEX] = fabric_ack[FABRIC_INDEX];
-                            end
-                        end
-                    end
-                end
-            end
+        for (bank_gen = 0; bank_gen < BANK_COUNT; bank_gen = bank_gen + 1) begin : gen_bank
+            wire [15:0] unused_pending;
+            wire unused_bank_mode;
+            aer_bank_packetizer #(
+                .BANK_ID(bank_gen),
+                .MAX_BANK_DELTA(MAX_BANK_DELTA)
+            ) bank_packetizer_i (
+                .clk(clk),
+                .rst_n(rst_n),
+                .tile_in_valid(tile_in_valid[bank_gen*16 +: 16]),
+                .tile_on_flat(tile_on_flat[bank_gen*64 +: 64]),
+                .tile_off_flat(tile_off_flat[bank_gen*64 +: 64]),
+                .tile_in_ready(tile_in_ready[bank_gen*16 +: 16]),
+                .time_now(time_now),
+                .out_data(bank_data_flat[bank_gen*16 +: 16]),
+                .out_valid(bank_valid[bank_gen]),
+                .out_ready(bank_ready[bank_gen]),
+                .out_last(bank_last[bank_gen]),
+                .pending_debug(unused_pending),
+                .bank_mode_debug(unused_bank_mode)
+            );
         end
     endgenerate
 
-    aer_fabric #(
-        .FIFO_DEPTH(`AER_TILE_FIFO_DEPTH),
-        .FIFO_ADDR_WIDTH(`AER_TILE_FIFO_ADDR_W)
-    ) fabric_i (
-        .clk                 (clk),
-        .rst_n               (rst_n),
-        .bank_req_async      (fabric_req_async),
-        .bank_polarity_async (fabric_polarity_async),
-        .bank_ack            (fabric_ack),
-        .time_now            (time_now),
-        .out_data            (event_data),
-        .out_valid           (event_valid),
-        .out_ready           (event_ready),
-        .tile_fifo_levels    (tile_fifo_levels)
+    aer_global_readout #(
+        .BANK_ROWS(BANK_ROWS),
+        .BANK_COLS(BANK_COLS),
+        .DATA_WIDTH(16)
+    ) readout_i (
+        .bank_data_flat(bank_data_flat),
+        .bank_valid(bank_valid),
+        .bank_last(bank_last),
+        .bank_ready(bank_ready),
+        .clk(clk),
+        .rst_n(rst_n),
+        .out_data(out_data),
+        .out_valid(out_valid),
+        .out_ready(out_ready),
+        .out_last(out_last)
     );
 
+    initial begin
+        if ((SENSOR_ROWS < 8) || (SENSOR_COLS < 8) ||
+            ((SENSOR_ROWS % 8) != 0) || ((SENSOR_COLS % 8) != 0)) begin
+            $display("AER_BAD_SENSOR_SIZE rows=%0d cols=%0d", SENSOR_ROWS, SENSOR_COLS);
+            $fatal(1);
+        end
+        if ((BANK_ROWS > 16) || (BANK_COLS > 16)) begin
+            $display("AER_BANK_ARRAY_TOO_LARGE rows=%0d cols=%0d", BANK_ROWS, BANK_COLS);
+            $fatal(1);
+        end
+        if (TILE_COUNT != (SENSOR_ROWS/2)*(SENSOR_COLS/2)) begin
+            $display("AER_TILE_COUNT_MISMATCH");
+            $fatal(1);
+        end
+    end
+endmodule
+
+module aer_top_128 (
+    input  wire          clk,
+    input  wire          rst_n,
+    input  wire [4095:0] tile_in_valid,
+    input  wire [16383:0] tile_on_flat,
+    input  wire [16383:0] tile_off_flat,
+    output wire [4095:0] tile_in_ready,
+    output wire [15:0]   out_data,
+    output wire          out_valid,
+    input  wire          out_ready,
+    output wire          out_last
+);
+    aer_top #(
+        .SENSOR_ROWS(128),
+        .SENSOR_COLS(128),
+        .MAX_BANK_DELTA(31)
+    ) top_i (
+        .clk(clk), .rst_n(rst_n),
+        .tile_in_valid(tile_in_valid),
+        .tile_on_flat(tile_on_flat),
+        .tile_off_flat(tile_off_flat),
+        .tile_in_ready(tile_in_ready),
+        .out_data(out_data),
+        .out_valid(out_valid),
+        .out_ready(out_ready),
+        .out_last(out_last)
+    );
 endmodule

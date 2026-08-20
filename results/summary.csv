@@ -1,0 +1,1 @@
+dataset,traffic_condition,design,input_events,accepted_events,output_words,words_per_input_event,words_per_accepted_event,mean_latency_cycles,p99_latency_cycles,throughput_events_per_cycle,loss_rate,row_packets,bank_packets,raw_tokens,group3_tokens,bin4_tokens,backpressure_cycles

@@ -1,47 +1,49 @@
-# 개인 접속 정보와 로컬 환경 파일
-참가팀 서버 접속 정보, IP, ID 2026.xlsx
+# Local credentials and editor state
 .env
 .env.*
 !.env.example
 *.key
 *.pem
-
-# 문서 변환 과정에서 생성된 임시 파일
-tmp/
-
-# 개인 학습용 강의 자료(재배포 금지 및 대용량 파일)
-Cadence_무료강의/
+.DS_Store
+Thumbs.db
+*.swp
+*~
 
 # Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.venv/
 
-# 다운로드한 공개 이벤트 데이터와 분석 결과
+# Dataset and read-only comparison checkout
 data/
-results/
+.reference/
 
-# Verilog 시뮬레이션 산출물
+# Vivado/XSim generated artifacts
 build/
+vivado/
+.Xil/
+*.xpr
+*.sim/
+*.runs/
+*.cache/
+*.hw/
+*.jou
+*.pb
+*.wdb
 *.vcd
 *.fst
 *.fsdb
-*.wdb
-*.shm/
+
+# Large or regenerable raw outputs. Curated CSV/JSON/PNG/WebP and summaries
+# under results/ remain tracked.
+results/logs/xsim/
+results/raw/
+results/tmp/
+
+# Cadence artifacts are ignored even though Cadence is not run in this phase.
 xcelium.d/
 INCA_libs/
-work/
-
-# 합성 및 배치·배선 도구의 로컬 산출물
-.Xil/
-*.jou
-*.pb
-*.rpt.tmp
+*.shm/
 genus_work/
 innovus_work/
-
-# 운영체제 및 편집기
-.DS_Store
-Thumbs.db
-*.swp
-*~

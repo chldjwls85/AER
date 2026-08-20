@@ -1,10 +1,7 @@
-rtl/frontend/aer_timebase.v
-rtl/frontend/aer_event_capture.v
-rtl/common/aer_rr_arbiter.v
-rtl/common/aer_sync_fifo.v
-rtl/common/aer_stream_reg.v
-rtl/core/aer_raw_packetizer.v
-rtl/core/aer_tile_raw.v
-rtl/core/aer_bank.v
-rtl/core/aer_fabric.v
+rtl/common/aer_timebase.v
+rtl/bank/aer_bank_packetizer.v
+rtl/common/aer_packet_rr_arbiter.v
+rtl/fabric/aer_packet_mux.v
+rtl/common/aer_stream_buffer2.v
+rtl/fabric/aer_global_readout.v
 rtl/aer_top.v

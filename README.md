@@ -1,92 +1,83 @@
-# AER 이벤트 통신 회로 설계
+# Lossless Adaptive AER Packet Readout
 
-이 저장소는 2026년 AI 반도체 회로설계 경진대회의 AER(Address-Event Representation) 연구 자료와 Verilog RTL 구현을 관리합니다.
+이 저장소는 128×128 polarity-event sensor의 16-bit global link를 위한
+ROW/BANK adaptive packetization RTL과 재현 가능한 검증·평가 환경이다.
 
-현재 1차 설계 목표는 다음과 같습니다.
+기존 RAW AER는 event마다 주소와 timestamp를 반복해 dense traffic에서 링크
+효율이 낮다. 팀 2차 설계는 같은 계층에서 RAW8/GROUP3/BIN4를 선택하지만,
+GROUP3와 단독 BIN4는 여전히 DATA word 하나를 사용하며 BIN4 두 개가 같은 row에
+모일 때만 word 수가 감소한다. 현재 구조는 픽셀 정보를 버리지 않고 active row
+수와 timestamp span에 따라 공유 overhead를 줄인다.
 
-> 제한된 AER 링크에서 비동기적으로 발생하는 polarity 이벤트의 전송 효율과 처리량을 높이는 타일 기반 이벤트 인코딩 및 중재 회로 설계
+```text
+128×128 pixels
+  -> 2×2 tile: ON[3:0], OFF[3:0]
+  -> 4×4 tiles / bank = 8×8 pixels
+  -> lossless ROW or BANK packet
+  -> 4×4-bank regional packet mux
+  -> 2-entry elastic buffer
+  -> root packet mux
+  -> 16-bit valid / ready / last
+```
 
-## 현재 연구 방향
+## Adaptive rule
 
-- `n × m` 이벤트 픽셀 배열에서 발생하는 희소·집중·폭주 트래픽 처리
-- 픽셀 → 타일 → 뱅크 계층 구조와 공유 링크의 병목 분석
-- 혼잡도에 따라 2×2 또는 4×4 단위로 묶는 적응형 픽셀 비닝 검토
-- 시계열 정보와 비닝 이력을 이용한 소프트웨어 복원 확장 검토
-- 처리량, 지연시간, 이벤트 손실률, 면적, 전력, 배선 비용 비교
+- 한 row만 active이거나 timestamp span이 31 clocks를 넘으면 ROW packet을 쓴다.
+- 두 row 이상이 active이고 전체 span이 31 clocks 이하이면 BANK packet을 쓴다.
+- BANK DATA는 tile ID 오름차순이며 16-bit tile mask가 위치를 복원한다.
+- DATA word는 `delta[4:0]`, `ON[3:0]`, `OFF[3:0]`를 보존한다.
+- binning, GROUP3, BIN4 또는 의도적 lossy compression은 사용하지 않는다.
 
-## 초기 RTL
+비트 규약은 [PACKET_FORMAT.md](docs/PACKET_FORMAT.md), 전체 신호 흐름은
+[ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했다.
 
-첫 기준 구현은 16×16 픽셀 배열을 16개의 4×4 타일과 4개의 뱅크로 나누고, 계층형 순환 중재를 거쳐 32비트 RAW 패킷을 출력합니다.
+## Repository layout
 
-- [초기 RTL 구조와 인터페이스](docs/초기_RTL_구조.md)
-- `rtl/`: 합성 가능한 Verilog-2001 소스
-- `tb/`: 자동 검사 시험 환경
-- `scripts/run_iverilog.ps1`: Icarus Verilog 실행 스크립트
-- `scripts/check_yosys.sh`: Yosys 계층·합성 가능성 검사
+```text
+rtl/          synthesizable Verilog-2001
+tb/           unit, regression, dataset self-checking testbenches
+scripts/      XSim, regression, dataset, reference helpers
+sw/           dataset loader, metrics, decoder, visualization
+docs/         architecture, verification, evaluation, handoff documents
+results/      curated summaries, metrics, figures, animations
+```
+
+## Vivado 2019.1 XSim
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_iverilog.ps1
+powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1
 ```
 
-Linux 또는 WSL에서 Yosys가 설치되어 있다면 다음 검사도 실행할 수 있습니다.
+기본 설치 경로가 아니면 `-VivadoPath`에 Vivado 2019.1의 `vivado.bat` 또는
+`bin` directory를 지정한다. 모든 test는 compile/elaboration/simulation과 PASS
+token을 확인하며 한 test라도 실패하면 non-zero로 종료한다.
 
-```sh
-sh scripts/check_yosys.sh
-```
+## Dataset evaluation
 
-초기 `rtl/aer_top.v` 계열은 RAW 계층 통신의 비교 기준선입니다. 아래 v1은 별도 경로에서 2×2 비트맵 인코딩과 행 우선 뱅크 통신을 시험합니다. 4×4 비닝, 적응형 혼잡 제어 및 메시 통신망은 후속 단계입니다.
+원본 dataset은 `data/` 아래에 두며 Git에 올리지 않는다. UZH
+`shapes_rotation`을 canonical event trace로 변환한 뒤 동일 trace를 fair RAW,
+팀 2차 설계, 현재 설계에 사용한다. 실행법과 provenance는
+[DATASET_EVALUATION.md](docs/DATASET_EVALUATION.md)에 기록한다.
 
-## 128×128 행·열 건너뛰기 RTL v1
+## Reproducibility anchors
 
-2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만들고, 16×16 뱅크 배열을 행 우선 순서로 읽는 v1 RTL을 추가했습니다. 이벤트가 없는 뱅크는 건너뛰고, 선택된 뱅크의 패킷이 끝날 때까지 선택을 유지합니다.
+- Repository: `https://github.com/chldjwls85/AER`
+- Current branch: `AER_hyeonho`
+- Team second design pinned commit:
+  `da686477ca054faada5f66d369f1fb253b2bf562`
+- Fair RAW top: `aer_v1_raw_top_128`, `ENABLE_BINNING=0`
+- Team second design: `aer_v1_top_128`, `ENABLE_BINNING=1`
+- Current top: `aer_top_128`
 
-- [v1 구조와 패킷 규약](docs/AER_v1_RTL_구조.md)
-- [적응형 대 무비닝 RAW8 공정 비교 규약](docs/AER_v1_공정비교_규약.md)
-- `rtl/v1/`: Verilog-2001 RTL
-- `tb/v1/`: 타일 부호기, 뱅크 읽기, 전역 선택기, 128×128 전체 시험
+Exact SHA와 평가일은 [REFERENCE_VERSIONS.md](docs/REFERENCE_VERSIONS.md)에 둔다.
 
-적응형 `aer_v1_top_128`과 무비닝 `aer_v1_raw_top_128`은 같은 core를 공유하며 `ENABLE_BINNING`만 다릅니다. 따라서 이후 계층이나 패킷 구조를 수정해도 두 비교군이 함께 갱신됩니다.
+## Known limitations
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_v1_xsim.ps1
-```
+- tile마다 pending slot이 하나이므로 source가 `tile_in_ready`를 지켜야 한다.
+- output은 16-bit single global link라 지속적인 overload를 제거하지 못한다.
+- BANK delta는 5-bit이며 31 clocks를 넘으면 ROW fallback한다.
+- timestamp wrap-around와 same-tile burst semantics는 regression에서 별도 확인한다.
+- PPA는 아직 측정하지 않았으며 이번 단계에서는 Cadence tool을 실행하지 않는다.
 
-128×128 전체 시험의 전역 뱅크 선택·패킷 출력 파형을 Vivado XSim GUI에서 열려면 다음을 실행합니다.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/open_v1_xsim_wave.ps1
-```
-
-## 사전 소프트웨어 검증
-
-MASK·BIN·CARE-AER RTL을 작성하기 전에 전송 정책을 비교할 수 있는 Python 기준 모델을 제공합니다.
-
-- [소프트웨어 검증 사용법](sw/README.md)
-- `sw/`: 합성 트래픽, UZH 이벤트 로더, 정책·링크 모델, 패킷 pack/unpack
-- `tests_sw/`: 자동 단위 시험
-- `scripts/run_sw_validation.ps1`: 시험과 네 합성 시나리오 일괄 실행
-
-~~~powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_sw_validation.ps1
-~~~
-
-이 결과는 구조 탐색용이며 RTL의 클록 정확 성능이나 PPA 결과를 대신하지 않습니다.
-
-## 주요 문서
-
-- [설계 제안서](AER_설계_제안서.md)
-- [설계 제안서 상세 부록](docs/AER_설계_부록.md)
-- [현재 구현의 기준 문서](docs/초기_RTL_구조.md)
-- [CARE-AER 소프트웨어 초기 검증 결과](docs/SW_초기_검증_결과.md)
-- [대회 오리엔테이션 정리](260723_오리엔테이션.md)
-- [1차 Q&A 정리](1차_Q&A_정리.md)
-- `Background/`: AER 관련 논문과 조사 자료
-
-## 저장소에 포함하지 않는 로컬 자료
-
-- 참가팀 서버 접속 정보
-- 재배포가 제한된 대용량 Cadence 강의 자료
-- PDF 변환 및 검토 과정에서 만들어진 임시 파일
-- 시뮬레이션·합성·배치배선 도구의 재생성 가능한 산출물
-
-향후 RTL 구현은 작은 배열과 기본 중재기부터 검증한 뒤, 배열 크기와 계층 구조를 단계적으로 확장합니다.
+Cadence 실험 가치가 정량적으로 확인될 때만 `GO for Cadence`로 동결하며,
+그 전까지 PPA 개선을 주장하지 않는다.
