@@ -3,7 +3,7 @@ param(
     [double]$PlaybackSpeed = 1297.016861,
     [int]$MaxEvents = 178165,
     [int]$PixelFifoDepth = 2,
-    [string]$Output = 'results\lossy_binning_sw\summary.json'
+    [string]$Output = 'results\lossy_binning_rtl_cycle_model\summary.json'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,7 +26,10 @@ try {
     & $python -m unittest tests_sw.test_lossy_binning_model -v
     if ($LASTEXITCODE -ne 0) { throw 'Lossy-binning unit tests failed.' }
 
-    & $python -m sw.lossy_binning_model `
+    & $python -m unittest tests_sw.test_rtl_cycle_model -v
+    if ($LASTEXITCODE -ne 0) { throw 'RTL-cycle model unit tests failed.' }
+
+    & $python -m sw.rtl_cycle_model `
         --dataset $Dataset `
         --clock-hz 100000000 200000000 `
         --playback-speed $PlaybackSpeed `
