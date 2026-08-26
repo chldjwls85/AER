@@ -1,14 +1,17 @@
 {
-  "accepted_transactions": 528,
-  "decoded_transactions": 528,
+  "accepted_transactions": 641,
+  "decoded_transactions": 641,
   "design": "current_adaptive",
   "extra_transactions": 0,
   "missing_transactions": 0,
   "mode_counts": {
-    "BANK": 17,
-    "ROW": 464
+    "BANK": 1,
+    "ROW": 4,
+    "SPARSE": 628
   },
-  "output_words": 1507,
+  "output_words": 1280,
+  "payload_mismatch_transactions": 0,
   "roundtrip_pass": true,
+  "timestamp_mismatch_transactions": 0,
   "window": "burst"
 }

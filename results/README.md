@@ -14,5 +14,6 @@ Raw datasets, XSim build trees, wave databases and uncurated logs are ignored.
 The raw/team/current full sweep is in `summary.csv`. `metrics/xsim_*.json`
 contains accepted/decoded counts for each representative window.
 
-Final status: `NO-GO / More architecture work required`; no Cadence tool was
-executed.
+Final status: `READY FOR CADENCE EVALUATION`. The full 7-speed UZH sweep and
+9/9 representative RTL round-trips passed with unintended loss 0. No Cadence
+tool was executed.

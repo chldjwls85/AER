@@ -12,37 +12,39 @@ All use 128x128 pixels, 2x2 ON/OFF tile input, 4x4 tiles/bank, one pending
 slot/tile, 16-bit valid/ready/last output, 100 MHz and the same canonical trace.
 The pinned reference RTL is exported, not merged into this branch.
 
-## Quantitative answer
+## Full quantitative answer
 
-At ordinary timing all designs accept every event. Current reduces words by
-only 194 of 278,066 (0.07%). At 1000x the model gives a 1.26% reduction in
-words/accepted-event and 1.57% more accepted events, but P99 latency rises from
-502 to 6,380 cycles. Actual dense-window XSim gives a stronger but still small
-3.65% word-efficiency gain and 28.1% more accepted transactions. Sparse XSim is
-exactly equal at 3 words/transaction, so there is no sparse penalty.
+| Speed | RAW words/accepted | Current words/accepted | Reduction | Accepted gain | RAW P99 | Current P99 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1x | 2.9944 | 1.9990 | 33.24% | 0.00% | 5 | 3 |
+| 10x | 2.9944 | 1.9990 | 33.24% | 0.00% | 5 | 3 |
+| 100x | 2.9944 | 1.9990 | 33.24% | 0.02% | 8 | 4 |
+| 500x | 2.9727 | 1.9982 | 32.78% | 16.84% | 303 | 76 |
+| 1000x | 2.9313 | 1.9960 | 31.90% | 36.15% | 502 | 2,577 |
+| 2000x | 2.8855 | 1.9945 | 30.88% | 36.23% | 644 | 5,051 |
+| 5000x | 2.7852 | 1.9928 | 28.45% | 36.53% | 832 | 4,710 |
+
+Quick result의 약 30% gain은 전체 sweep에서 유지됐다. 500x까지 Current P99가
+RAW보다 낮지만, 1000x 이상에서는 더 많은 event를 수용하고 max pending이
+194/338/529까지 커지면서 tail latency가 RAW보다 높다. 이는 숨겨진 loss가 아니라
+single-link overload에서 나타난 throughput-latency trade-off다.
 
 Team second equals Fair RAW on this UZH trace: GROUP3=0, BIN4=0 and BIN pair=0
 in all representative XSim windows. This is not a general claim that bin
 packing never helps; the pinned unit tests prove it helps full one-polarity
 tiles, but those patterns do not occur here after cycle/tile canonicalization.
 
-## Research questions
+## Representative RTL answer
 
-1. Multi-row bank activity is not frequent enough: BANK fraction is 0.21% at
-   1x and peaks at 3.07% at 500x in the sweep.
-2. BANK selection therefore remains a small minority of packets.
-3. RAW reduction is 0.07% at 1x, 1.69% at 500x, and 1.26% at 1000x.
-4. Team second is identical to RAW for this dataset, so the same percentages
-   apply versus Team.
-5. Sparse traffic has no measured overhead: 111 accepted, 333 words for all.
-6. Dense/burst latency is not improved in the long-trace model; it is worse.
-7. Backpressure begins between 10x and 100x for all designs; no clear
-   saturation-onset shift is demonstrated.
-8. The small traffic reduction does not justify Cadence PPA effort for this
-   architecture hypothesis yet.
-9. Only the provenance-confirmed UZH trace was evaluated, so cross-dataset
-   generality is not established.
-10. The practical gate is not met.
+| Window | RAW accepted / words / words-per-transaction | Current accepted / words / words-per-transaction | Reduction |
+|---|---|---|---:|
+| sparse | 111 / 333 / 3.0000 | 111 / 222 / 2.0000 | 33.33% |
+| dense | 416 / 1,228 / 2.9519 | 649 / 1,298 / 2.0000 | 32.25% |
+| burst | 423 / 1,237 / 2.9243 | 641 / 1,280 / 1.9969 | 31.71% |
+
+모든 Current accepted transaction이 exact decoder round-trip을 통과했다. Current
+mode는 sparse/dense/burst에서 각각 `111/0/0`, `639/2/2`, `628/4/1`
+(SPARSE/ROW/BANK)으로 SPARSE가 지배적이다.
 
 ## Previous ROW/BANK decision
 
@@ -51,12 +53,11 @@ but representative real-data efficiency is below 10%, the best actual RTL
 window is 3.65%, and modeled P99 latency degrades under accelerated load.
 Cadence tools were not run.
 
-## Current SPARSE quick-gate decision
+## Current decision
 
-SPARSE packet을 추가한 단일 개선 iteration은 1x에서 1.9990 words/event로 RAW
-2.9944 대비 33.24% 감소했고, 1000x에서 1.9960 words/accepted-event로 RAW
-2.9313 대비 31.91% 감소했다. 기존 dense XSim RAW 2.9519에 대해 새 RTL은
-2.0000 words/transaction으로 32.25% 감소했다. 1000x P99는 이전 Current의
-6,380에서 2,577 cycles로 완화됐지만 RAW 502보다는 높다. Quick gate 판단은
-**PROMISING: proceed to full evaluation**이며 전체 sweep 전에는 Cadence로
-넘어가지 않는다.
+**READY FOR CADENCE EVALUATION.** Functional regression, full UZH sweep and
+all representative RTL round-trips pass with unintended loss 0. Word reduction
+is consistent and well above the 10% practical gate. Cadence evaluation should
+measure whether the additional packet-cost logic is justified in area/timing,
+and must report the 1000x+ P99 penalty alongside throughput gains. Cadence tools
+were not executed here.

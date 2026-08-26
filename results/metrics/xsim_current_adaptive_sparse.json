@@ -6,9 +6,12 @@
   "missing_transactions": 0,
   "mode_counts": {
     "BANK": 0,
-    "ROW": 111
+    "ROW": 0,
+    "SPARSE": 111
   },
-  "output_words": 333,
+  "output_words": 222,
+  "payload_mismatch_transactions": 0,
   "roundtrip_pass": true,
+  "timestamp_mismatch_transactions": 0,
   "window": "sparse"
 }

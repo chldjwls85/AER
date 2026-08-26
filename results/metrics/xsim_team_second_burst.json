@@ -12,6 +12,8 @@
     "ROW": 407
   },
   "output_words": 1237,
+  "payload_mismatch_transactions": 0,
   "roundtrip_pass": true,
+  "timestamp_mismatch_transactions": 0,
   "window": "burst"
 }

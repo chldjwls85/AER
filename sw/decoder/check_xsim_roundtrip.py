@@ -163,6 +163,7 @@ def main() -> None:
     decoded, counts = decode_current(words) if args.design == "current_adaptive" else decode_team(words)
     missing = expected - decoded
     extra = decoded - expected
+    exact_roundtrip = not missing and not extra
     result = {
         "design": args.design,
         "window": args.window,
@@ -171,8 +172,13 @@ def main() -> None:
         "output_words": len(words),
         "missing_transactions": sum(missing.values()),
         "extra_transactions": sum(extra.values()),
+        # The Counter key is the complete semantic transaction
+        # (tile, ON, OFF, timestamp).  Exact multiset equality therefore
+        # proves both fields below are zero independently of packet format.
+        "payload_mismatch_transactions": 0 if exact_roundtrip else None,
+        "timestamp_mismatch_transactions": 0 if exact_roundtrip else None,
         "mode_counts": counts,
-        "roundtrip_pass": not missing and not extra,
+        "roundtrip_pass": exact_roundtrip,
     }
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")

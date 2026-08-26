@@ -15,7 +15,7 @@ from sw.dataset.canonical_trace import TileTransaction
 DESIGN_LABELS = {
     "raw_baseline": "Fair RAW",
     "team_second": "Team BIN/GROUP",
-    "current_adaptive": "Current ROW/BANK",
+    "current_adaptive": "Current SPARSE/ROW/BANK",
 }
 DESIGN_COLORS = {
     "raw_baseline": (55, 126, 184),

@@ -3,11 +3,32 @@
 이 저장소는 128×128 polarity-event sensor의 16-bit global link를 위한
 SPARSE/ROW/BANK adaptive packetization RTL과 재현 가능한 검증·평가 환경이다.
 
-기존 RAW AER는 event마다 주소와 timestamp를 반복해 dense traffic에서 링크
-효율이 낮다. 팀 2차 설계는 같은 계층에서 RAW8/GROUP3/BIN4를 선택하지만,
-GROUP3와 단독 BIN4는 여전히 DATA word 하나를 사용하며 BIN4 두 개가 같은 row에
-모일 때만 word 수가 감소한다. 현재 구조는 픽셀 정보를 버리지 않고 active row
-수와 timestamp span에 따라 공유 overhead를 줄인다.
+현재 구조는 픽셀 정보를 버리지 않으면서 실제 workload에서 가장 흔한 singleton
+tile transaction을 직접 줄이고, 나머지는 ROW/BANK format으로 보존한다.
+
+## Why SPARSE / ROW / BANK?
+
+1. **Fair RAW baseline.** event마다 spatial address와 timestamp metadata를
+   반복하므로 dense traffic에서 16-bit link efficiency가 낮다.
+2. **Team second/reference.** RAW8/GROUP3/BIN4와 BIN pair packing을 사용하지만,
+   UZH `shapes_rotation`에서는 GROUP3/BIN4 opportunity가 거의 없어 실제 output
+   word가 Fair RAW와 같았다.
+3. **Previous ROW/BANK.** multi-row bank locality로 address/timestamp를 공유하려
+   했지만 BANK fraction이 약 0.2~3%에 그쳤다. Dense XSim 개선은 3.65%였고
+   1000x P99는 6,380 cycles까지 증가해 NO-GO였다.
+4. **Workload observation.** canonical trace 대부분은 한 2×2 tile-cycle에 polarity
+   bit가 하나뿐이었다. 드문 multi-row case보다 흔한 sparse case 최적화가 더
+   중요하다고 판단했다.
+5. **Current design.** singleton ROW의 3 words를 lossless SPARSE 2 words로 줄이고
+   ROW/BANK fallback을 유지한다. SPARSE/ROW 대안과 BANK cost를 비교해 BANK가
+   strictly cheaper일 때만 선택하며, 같은 cost면 짧은 packet을 우선한다.
+6. **Lossless evidence.** bank ID, tile ID, pixel ID, polarity와 full 16-bit
+   timestamp를 모두 보존한다. Functional random 2,050건과 sparse/dense/burst
+   dataset RTL decoder round-trip이 모두 PASS했고 unintended loss는 0이다.
+7. **Measured result.** Full 7-speed sweep에서 RAW 대비 words/accepted-event가
+   28.45~33.24% 감소했고, 500x 이상에서는 accepted event도 16.84~36.53%
+   증가했다. 대신 1000x 이상 P99는 RAW보다 높아 throughput-latency trade-off가
+   남는다.
 
 ```text
 128×128 pixels
@@ -80,15 +101,18 @@ merge하지 않는다.
 
 - 기능 regression: 5/5 PASS
 - random accepted-to-decoded round-trip: 2,050/2,050
-- quick 1x software words/event: RAW/Team 2.9944, Current 1.9990
-- quick 1000x software words/accepted-event: RAW/Team 2.9313, Current 1.9960
-- quick 1000x P99: 이전 ROW/BANK 6,380, Current 2,577 cycles
-- dense XSim: RAW/Team 2.9519 (기존 pinned 결과), Current 2.0000 words/transaction
-- dense Current round-trip: 649/649, missing/extra 0/0
+- full UZH software sweep: 1/10/100/500/1000/2000/5000x 완료
+- RAW 대비 words/accepted-event 감소: 28.45~33.24%
+- 1000x: RAW 2.9313, Current 1.9960 words/accepted-event; accepted event +36.15%
+- 1000x P99: RAW 502, Previous ROW/BANK 6,380, Current 2,577 cycles
+- dataset RTL: 9/9 compile/elaboration/simulation/round-trip PASS
+- dense XSim: RAW/Team 2.9519, Current 2.0000 words/transaction
+- Current sparse/dense/burst round-trip: 111/111, 649/649, 641/641;
+  missing/extra/payload/timestamp mismatch 모두 0
+- unintended loss: 0 in all software and accepted RTL comparisons
 
-Quick gate 결론은 **PROMISING: proceed to full evaluation**이다. 전체 speed sweep과
-추가 dataset 검증 전까지 Cadence handoff는 계속 보류하며 Cadence tool은 실행하지
-않았다.
+결론은 **READY FOR CADENCE EVALUATION**이다. 이는 다음 단계에서 PPA를 평가할
+가치가 있다는 뜻이며, 이 저장소 평가에서는 Cadence tool을 실행하지 않았다.
 
 ## Reproducibility anchors
 
@@ -114,5 +138,6 @@ Exact SHA와 평가일은 [REFERENCE_VERSIONS.md](docs/REFERENCE_VERSIONS.md)에
 - UZH 한 dataset만 provenance가 확인됐고 CIFAR10-DVS 기존 사용 증거는 없었다.
 - PPA는 측정하지 않았으며 이번 단계에서 Cadence tool을 실행하지 않았다.
 
-다음 구조 연구가 representative traffic에서 약 10% 이상 개선을 보인 뒤에만
-Cadence handoff HOLD를 해제한다.
+Full UZH gate는 통과했지만 dataset generality와 PPA는 아직 확인하지 않았다.
+다음 단계에서는 이 RTL을 변경하지 않고 Cadence PPA와 추가 dataset robustness를
+평가한다.

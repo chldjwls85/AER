@@ -47,6 +47,17 @@ cost를 합산하고, 전체 BANK cost가 그보다 엄격히 작으며 timestam
 이하일 때만 BANK를 선택한다. 동률이면 packet lock이 짧은 SPARSE/ROW를 택한다.
 ROW에서는 5-bit delta에 들어가는 tile만 현재 packet에 포함한다.
 
+한 row에서 `S`는 singleton, `N`은 non-singleton, `P=S+N`이라 할 때 비용은
+다음과 같다.
+
+- ROW-only: `P + 2`
+- SPARSE/ROW hybrid: `2*S + (N+2 if N>0 else 0)`
+- BANK snapshot: `total P + 3`
+
+각 row는 앞의 두 비용 중 작은 값을 쓰며, BANK는 active row가 둘 이상이고 전체
+timestamp span이 31 이하이면서 row별 최소 비용 합보다 strictly cheaper일 때만
+선택한다. 동률이면 더 짧은 SPARSE/ROW packet lock을 우선한다.
+
 DATA word가 `out_valid && out_ready`로 수용될 때만 해당 pending slot을 해제한다.
 역압 동안 `out_data/out_valid/out_last`는 안정적으로 유지된다.
 
@@ -63,3 +74,5 @@ root mux도 같은 packet-lock을 적용하므로 서로 다른 bank packet이 i
 - tile pending depth는 1이다. source가 ready를 무시하면 event를 수용하지 않는다.
 - BANK delta 범위는 0..31 clocks다.
 - timestamp wrap-around에 대한 oldest/min/max 판단은 별도 제한 사항이다.
+- 1000x 이상 overload에서는 더 많은 event를 수용하는 대신 pending queue가
+  커져 RAW보다 P99 latency가 높아질 수 있다.

@@ -14,11 +14,13 @@
 | First RTL freeze SHA | `f37ed043832424e18105d34fd81f29842d330c49` |
 | Evaluated RTL basis | first freeze packetizer plus regression commit `a089f6f3291c38f880f096763137accd66e5f240` |
 | Evaluation commit SHA | `34e7417c58e5a6824c7cfb12878f0da08f0dcd1a` |
+| SPARSE/ROW/BANK RTL candidate SHA | `41292b5ca307f18b8d6e5730f1cd0b3335757629` |
 | Primary real dataset | UZH Event-Camera Dataset `shapes_rotation` |
 | CIFAR10-DVS provenance | not found in any repository ref/history or local `AI-semi` files |
-| Evaluation date | 2026-08-21 (Asia/Seoul) |
+| Previous ROW/BANK evaluation date | 2026-08-21 (Asia/Seoul) |
+| SPARSE full evaluation date | 2026-08-26 (Asia/Seoul) |
 | UZH archive SHA-256 | `56aade6bf53dcf73e8fe40905ccac8385cd7606bc9a85103bf2c9f9045117551` |
-| Current quick-gate decision | `PROMISING: proceed to full evaluation` |
+| Current full-gate decision | `READY FOR CADENCE EVALUATION` |
 
 Pinned SHA를 primary comparison source로 사용한다. 팀 branch가 이후 변경되더라도
 평가 입력 RTL은 이 SHA에서 export해 재현성을 유지한다.

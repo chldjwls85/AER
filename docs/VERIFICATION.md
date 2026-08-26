@@ -87,17 +87,16 @@ Dataset tokens are `AER_DATASET_XSIM_PASS`,
 `AER_DATASET_ROUNDTRIP_PASS`, and `AER_DATASET_XSIM_ALL_PASS`. Curated
 summaries are under `results/logs`; raw word logs are ignored.
 
-One evidence-driven packet-collection delay was tested. It passed all
-functional and dataset round-trips but did not reduce dense words and reduced
-accepted transactions, so it was reverted. The final RTL packetizer matches
-the first freeze exactly.
+Previous ROW/BANK에서 packet-collection delay를 시험했으나 dense words를 줄이지
+못하고 accepted transaction을 감소시켜 revert했다. 현재 SPARSE/ROW/BANK RTL은
+그 이후 workload evidence에 따라 동결한 별도 candidate다.
 
-## SPARSE quick gate
+## SPARSE full gate
 
-전체 sweep을 재실행하기 전에 요청된 최소 gate만 수행했다. 1x/1000x software
-model과 기존 1000x dense vector의 Current RTL XSim을 실행했다. Dense RTL은
-compile/elaboration/simulation과 decoder round-trip이 모두 PASS했고 649 accepted
-transactions에서 1,298 words, missing/extra 0/0을 기록했다. Mode count는
-SPARSE/ROW/BANK = 639/2/2다. 상세 값은
-`results/metrics/sparse_quick_software.json`과
-`results/metrics/xsim_current_adaptive_dense.json`에 있다.
+1/10/100/500/1000/2000/5000x software sweep과 기존 deterministic 9개 RTL
+window를 모두 재실행했다. Functional regression은 5/5, dataset XSim과 decoder
+round-trip은 9/9 PASS다. Current sparse/dense/burst accepted-to-decoded 결과는
+111/111, 649/649, 641/641이며 missing/extra/payload/timestamp mismatch는 모두
+0이다. Dense mode count는 SPARSE/ROW/BANK = 639/2/2다. 상세 값은
+`results/summary.csv`, `results/metrics/dataset_results.json`과
+`results/metrics/xsim_current_adaptive_*.json`에 있다.

@@ -53,8 +53,9 @@ Decoder는 column mask의 set bit를 낮은 column부터 DATA word에 대응시�
 | DATA | `[2:0]` | 3 | reserved, zero |
 
 Decoder는 tile mask의 set bit를 local tile ID 0부터 오름차순으로 DATA word에
-대응시킨다. 두 row 이상 active이고 모든 delta가 31 이하일 때만 선택된다.
-범위를 넘으면 ROW fallback하므로 delta overflow를 잘라내지 않는다.
+대응시킨다. 두 row 이상 active이고 모든 delta가 31 이하이며 BANK word cost가
+최소 SPARSE/ROW 대안보다 strictly smaller일 때만 선택된다. 범위나 cost 조건을
+만족하지 않으면 lossless SPARSE/ROW fallback하므로 delta를 잘라내지 않는다.
 
 ## Lossless definition
 
@@ -62,3 +63,7 @@ Decoder는 tile mask의 set bit를 local tile ID 0부터 오름차순으로 DATA
 timestamp가 packet으로 복원되어야 한다. 입력 interface 자체는 같은 pixel의
 반복 횟수가 아니라 한 capture cycle의 ON/OFF bitmap을 표현한다. 따라서 dataset
 평가에서 source event와 canonical tile transaction을 별도 집계한다.
+
+현재 candidate는 functional random 2,050건과 UZH sparse/dense/burst RTL window의
+accepted transaction 전부를 decoder로 복원했으며 missing, extra, payload mismatch,
+timestamp mismatch가 모두 0이다.
