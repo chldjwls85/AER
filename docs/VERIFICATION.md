@@ -4,7 +4,7 @@
 
 | Test | Purpose | Expected token | Status |
 |---|---|---|---|
-| `tb_aer_bank_packetizer` | delta 31/32, ROW/BANK words, backpressure | `AER_BANK_PACKETIZER_TB_PASS` | PASS |
+| `tb_aer_bank_packetizer` | SPARSE ON/OFF/pixel/timestamp, delta 31/32, ROW/BANK, backpressure | `AER_BANK_PACKETIZER_TB_PASS` | PASS |
 | `tb_aer_top` | 16×16 hierarchy, mixed payload, multi-bank packet lock | `AER_ADAPTIVE_PACKET_TB_PASS` | PASS |
 | `tb_aer_top_128_smoke` | 128×128 elaboration and bank 0/255 connectivity | `AER_128_SMOKE_PASS` | PASS |
 | `tb_aer_protocol_stress` | idle/mid-packet reset, random stalls, 4-bank long contention/fairness | `AER_PROTOCOL_STRESS_PASS` | PASS |
@@ -22,6 +22,10 @@ powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1
 |---|---|---|
 | Basic ROW | one active row; exact header/time/payload/LAST | PASS |
 | Basic BANK | two active rows; exact header/mask/base time/data order/LAST | PASS |
+| Basic SPARSE | ON/OFF and local pixel 0/1/2/3; exact address/time/LAST | PASS |
+| SPARSE backpressure | two-word packet stable while stalled | PASS |
+| Consecutive SPARSE | same tile held by ready, accepted and decoded after release | PASS |
+| Cost selection | SPARSE/ROW/BANK directed transitions and mixed payload exclusion | PASS |
 | Mixed ON/OFF | independent 4-bit ON and OFF patterns | PASS |
 | Multiple active tiles | full row plus multi-row mask/order checks | PASS |
 | Timestamp boundary | delta 31 remains BANK; delta 32 falls back to ROW | PASS |
@@ -42,9 +46,9 @@ hold it, and the test proves that the held transaction is later accepted.
 
 ## Execution record
 
-2026-08-21 Windows native PowerShell에서
+2026-08-26 Windows native PowerShell에서
 `C:\Xilinx\Vivado\2019.1\bin\vivado.bat` (Vivado v2019.1 build 2552052)를
-사용했다. 각 top의 `xvlog`, `xelab`, `xsim`이 모두 성공했고 각 XSim log에서
+사용했다. SPARSE 변경 후 각 top의 `xvlog`, `xelab`, `xsim`이 모두 성공했고 각 XSim log에서
 PASS token을 직접 확인했다. 최종 summary는 `TOTAL=5`, `PASS_COUNT=5`,
 `FAIL_COUNT=0`, `AER_ALL_TESTS_PASS`이다.
 
@@ -87,3 +91,13 @@ One evidence-driven packet-collection delay was tested. It passed all
 functional and dataset round-trips but did not reduce dense words and reduced
 accepted transactions, so it was reverted. The final RTL packetizer matches
 the first freeze exactly.
+
+## SPARSE quick gate
+
+전체 sweep을 재실행하기 전에 요청된 최소 gate만 수행했다. 1x/1000x software
+model과 기존 1000x dense vector의 Current RTL XSim을 실행했다. Dense RTL은
+compile/elaboration/simulation과 decoder round-trip이 모두 PASS했고 649 accepted
+transactions에서 1,298 words, missing/extra 0/0을 기록했다. Mode count는
+SPARSE/ROW/BANK = 639/2/2다. 상세 값은
+`results/metrics/sparse_quick_software.json`과
+`results/metrics/xsim_current_adaptive_dense.json`에 있다.

@@ -113,3 +113,21 @@ opportunity was too small to justify more control logic.
 
 The PNGs and first/last animation frames were opened after generation. No
 empty/corrupt image, coordinate inversion, or single-frame animation was found.
+
+## SPARSE/ROW/BANK quick evaluation (2026-08-26)
+
+기존 provenance, crop, canonicalization을 그대로 재사용하고 전체 sweep/figure는
+재생성하지 않았다.
+
+| Speed | Design | Accepted events | Output words | Words/accepted event | Mean latency | P99 | SPARSE / ROW / BANK packets |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 1x | Fair RAW | 92,861 | 278,066 | 2.9944 | 2.13 | 5 | 0 / 92,647 / 0 |
+| 1x | Team second | 92,861 | 278,066 | 2.9944 | 2.13 | 5 | 0 / 92,647 / 0 |
+| 1x | SPARSE/ROW/BANK | 92,861 | 185,633 | 1.9990 | 1.09 | 3 | 92,683 / 89 / 0 |
+| 1000x | Fair RAW | 46,610 | 136,626 | 2.9313 | 145.14 | 502 | 0 / 45,058 / 0 |
+| 1000x | SPARSE/ROW/BANK | 63,458 | 126,665 | 1.9960 | 149.38 | 2,577 | 62,825 / 198 / 39 |
+
+1000x P99는 이전 ROW/BANK의 6,380 cycles보다 낮아졌지만 RAW의 502 cycles보다
+여전히 높다. Dense representative RTL은 649 transactions, 1,298 words,
+2.0000 words/transaction이며 round-trip 649/649 PASS다. 기존 pinned RAW/Team
+dense 값은 각각 416 transactions, 1,228 words, 2.9519 words/transaction이다.

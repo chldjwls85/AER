@@ -169,24 +169,26 @@ module tb_aer_bank_packetizer;
         // payload.  A timestamp span of exactly 31 must select BANK mode.
         drive_tile(15, 4'b1000, 4'b0000, 16'd10);
         wait_for_stalled_output;
-        drive_tile(0, 4'b0001, 4'b0000, 16'd100);
+        drive_tile(0, 4'b0001, 4'b1000, 16'd100);
         drive_tile(4, 4'b0010, 4'b0100, 16'd131);
         @(negedge clk);
         out_ready = 1'b1;
 
         capture_packet;
-        check_count(3, 1);
-        if (packet_words[0][15:14] !== 2'b11) begin
-            $display("TB_ERROR TEST1: blocker was not a ROW packet");
+        check_count(2, 1);
+        if (packet_words[0][15] !== 1'b0) begin
+            $display("TB_ERROR TEST1: blocker was not a SPARSE packet");
             errors = errors + 1;
         end
+        check_word(0, 16'h2d7f, 1);
+        check_word(1, 16'd10, 1);
 
         capture_packet;
         check_count(5, 1);
         check_word(0, 16'h9684, 1);
         check_word(1, 16'h0011, 1);
         check_word(2, 16'd100, 1);
-        check_word(3, 16'h0080, 1);
+        check_word(3, 16'h00c0, 1);
         check_word(4, 16'hf920, 1);
 
         for (stall_index = 0; stall_index < 3; stall_index = stall_index + 1) begin
@@ -199,25 +201,50 @@ module tb_aer_bank_packetizer;
         out_ready = 1'b0;
         drive_tile(15, 4'b1000, 4'b0000, 16'd20);
         wait_for_stalled_output;
-        drive_tile(0, 4'b0001, 4'b0000, 16'd200);
-        drive_tile(4, 4'b0010, 4'b0000, 16'd232);
+        drive_tile(0, 4'b0001, 4'b1000, 16'd200);
+        drive_tile(4, 4'b0010, 4'b0100, 16'd232);
         @(negedge clk);
         out_ready = 1'b1;
 
         capture_packet;
-        check_count(3, 2);
+        check_count(2, 2);
 
         capture_packet;
         check_count(3, 2);
         check_word(0, 16'hd681, 2);
         check_word(1, 16'd200, 2);
-        check_word(2, 16'h0080, 2);
+        check_word(2, 16'h00c0, 2);
 
         capture_packet;
         check_count(3, 2);
         check_word(0, 16'hd691, 2);
         check_word(1, 16'd232, 2);
-        check_word(2, 16'h0100, 2);
+        check_word(2, 16'h0120, 2);
+
+        // TEST 3: explicit SPARSE ON/OFF coverage for all local pixels.
+        drive_tile(0, 4'b0001, 4'b0000, 16'h1234);
+        capture_packet;
+        check_count(2, 3);
+        check_word(0, 16'h2d01, 3);
+        check_word(1, 16'h1234, 3);
+
+        drive_tile(1, 4'b0010, 4'b0000, 16'h2345);
+        capture_packet;
+        check_count(2, 3);
+        check_word(0, 16'h2d0b, 3);
+        check_word(1, 16'h2345, 3);
+
+        drive_tile(2, 4'b0000, 4'b0100, 16'h3456);
+        capture_packet;
+        check_count(2, 3);
+        check_word(0, 16'h2d14, 3);
+        check_word(1, 16'h3456, 3);
+
+        drive_tile(3, 4'b0000, 4'b1000, 16'h4567);
+        capture_packet;
+        check_count(2, 3);
+        check_word(0, 16'h2d1e, 3);
+        check_word(1, 16'h4567, 3);
 
         if (errors == 0)
             $display("AER_BANK_PACKETIZER_TB_PASS");

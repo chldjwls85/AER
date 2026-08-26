@@ -9,7 +9,7 @@
         v
 256 × aer_bank_packetizer
         | 4×4 tiles per bank / 8×8 pixels
-        | ROW or BANK packet stream
+        | SPARSE, ROW or BANK packet stream
         v
 16 × regional aer_packet_mux
         |
@@ -31,7 +31,7 @@ root aer_packet_mux
 | Module | Role |
 |---|---|
 | `aer_timebase` | 16-bit free-running capture timestamp |
-| `aer_bank_packetizer` | 16 tile pending slots, ROW/BANK selection and serialization |
+| `aer_bank_packetizer` | 16 tile pending slots, SPARSE/ROW/BANK selection and serialization |
 | `aer_packet_rr_arbiter` | packet-locked look-ahead round-robin grant |
 | `aer_packet_mux` | selected stream ready/valid/last routing |
 | `aer_stream_buffer2` | two-entry elastic word buffer |
@@ -41,10 +41,11 @@ root aer_packet_mux
 ## Bank behavior
 
 각 tile은 한 개의 pending slot에 accepted ON/OFF bitmap과 16-bit timestamp를
-저장한다. pending snapshot의 active row가 둘 이상이고 unsigned
-`max_timestamp-min_timestamp <= 31`이면 BANK packet을 만든다. 그렇지 않으면
-가장 먼저 active인 row를 ROW packet으로 보낸다. ROW에서도 5-bit delta에
-들어가는 tile만 현재 packet에 포함하고 나머지는 다음 packet으로 보낸다.
+저장한다. 한 polarity bit만 가진 transaction은 SPARSE 후보이며 주소와 full
+timestamp를 2 words로 보낸다. packetizer는 row별 ROW cost와 SPARSE/ROW 혼합
+cost를 합산하고, 전체 BANK cost가 그보다 엄격히 작으며 timestamp span이 31
+이하일 때만 BANK를 선택한다. 동률이면 packet lock이 짧은 SPARSE/ROW를 택한다.
+ROW에서는 5-bit delta에 들어가는 tile만 현재 packet에 포함한다.
 
 DATA word가 `out_valid && out_ready`로 수용될 때만 해당 pending slot을 해제한다.
 역압 동안 `out_data/out_valid/out_last`는 안정적으로 유지된다.

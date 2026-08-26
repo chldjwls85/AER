@@ -80,14 +80,15 @@ module tb_aer_top_128_smoke;
         end
     endtask
 
-    task check_three_word_row;
+    task check_packet;
+        input [31:0] expected_count;
         input [15:0] expected_header;
         input [15:0] expected_data;
         input [31:0] test_number;
         begin
-            if (packet_count != 3) begin
-                $display("AER_128_SMOKE_FAIL TEST%0d expected 3 words, got %0d",
-                         test_number, packet_count);
+            if (packet_count != expected_count) begin
+                $display("AER_128_SMOKE_FAIL TEST%0d expected %0d words, got %0d",
+                         test_number, expected_count, packet_count);
                 errors = errors + 1;
             end
             if (packet_words[0] !== expected_header) begin
@@ -95,14 +96,13 @@ module tb_aer_top_128_smoke;
                          test_number, expected_header, packet_words[0]);
                 errors = errors + 1;
             end
-            if (packet_words[2] !== expected_data) begin
+            if (packet_words[expected_count-1] !== expected_data) begin
                 $display("AER_128_SMOKE_FAIL TEST%0d data expected=%h got=%h",
-                         test_number, expected_data, packet_words[2]);
+                         test_number, expected_data, packet_words[expected_count-1]);
                 errors = errors + 1;
             end
             if ((packet_last[0] !== 1'b0) ||
-                (packet_last[1] !== 1'b0) ||
-                (packet_last[2] !== 1'b1)) begin
+                (packet_last[expected_count-1] !== 1'b1)) begin
                 $display("AER_128_SMOKE_FAIL TEST%0d out_last placement", test_number);
                 errors = errors + 1;
             end
@@ -129,7 +129,7 @@ module tb_aer_top_128_smoke;
         // Bank 0, local tile 0 -> row 0, column 0.
         drive_tile(0, 4'b0001, 4'b0000);
         capture_packet;
-        check_three_word_row(16'hc001, 16'h0080, 1);
+        check_packet(2, 16'h0001, 16'h0003, 1);
 
         for (wait_index = 0; wait_index < 4; wait_index = wait_index + 1) begin
             @(posedge clk);
@@ -139,10 +139,10 @@ module tb_aer_top_128_smoke;
         // input slices, final region, and full 8-bit bank address.
         drive_tile(4095, 4'b1010, 4'b0101);
         capture_packet;
-        check_three_word_row(16'hfff8, 16'h0528, 2);
+        check_packet(3, 16'hfff8, 16'h0528, 2);
 
         if (errors == 0)
-            $display("AER_128_SMOKE_PASS packets=2 words=6");
+            $display("AER_128_SMOKE_PASS packets=2 words=5");
         else
             $display("AER_128_SMOKE_FAIL errors=%0d", errors);
 

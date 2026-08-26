@@ -53,6 +53,8 @@ module tb_aer_roundtrip_random;
     reg [15:0] decoded_time;
     reg [3:0] decoded_on;
     reg [3:0] decoded_off;
+    reg [1:0] decoded_sparse_pixel;
+    reg decoded_sparse_polarity;
     reg [15:0] remaining_after_decode;
     reg found_match;
     integer bit_index;
@@ -133,7 +135,16 @@ module tb_aer_roundtrip_random;
         end else if (out_valid && out_ready) begin
             case (decode_state)
                 0: begin
-                    if (out_data[15:14] == 2'b11) begin
+                    if (out_data[15] == 1'b0) begin
+                        if (out_data[14:7] != 8'd37) begin
+                            $display("ROUNDTRIP_ERROR SPARSE bank ID %0d", out_data[14:7]);
+                            errors = errors + 1;
+                        end
+                        decoded_tile = out_data[6:3];
+                        decoded_sparse_pixel = out_data[2:1];
+                        decoded_sparse_polarity = out_data[0];
+                        decode_state = 5;
+                    end else if (out_data[15:14] == 2'b11) begin
                         if (out_data[13:6] != 8'd37) begin
                             $display("ROUNDTRIP_ERROR ROW bank ID %0d", out_data[13:6]);
                             errors = errors + 1;
@@ -225,6 +236,41 @@ module tb_aer_roundtrip_random;
                             decode_state = 0;
                     end
                 end
+                5: begin
+                    decoded_time = out_data;
+                    decoded_on = 4'b0000;
+                    decoded_off = 4'b0000;
+                    if (decoded_sparse_polarity)
+                        decoded_on[decoded_sparse_pixel] = 1'b1;
+                    else
+                        decoded_off[decoded_sparse_pixel] = 1'b1;
+                    found_match = 1'b0;
+                    selected_index = -1;
+                    for (search_index = 0; search_index < expected_count;
+                         search_index = search_index + 1) begin
+                        if (!found_match && !expected_matched[search_index] &&
+                            expected_tile[search_index] == decoded_tile &&
+                            expected_on[search_index] === decoded_on &&
+                            expected_off[search_index] === decoded_off &&
+                            expected_time[search_index] === decoded_time) begin
+                            found_match = 1'b1;
+                            selected_index = search_index;
+                        end
+                    end
+                    if (!found_match) begin
+                        $display("ROUNDTRIP_ERROR unmatched SPARSE tile=%0d on=%h off=%h time=%0d",
+                                 decoded_tile, decoded_on, decoded_off, decoded_time);
+                        errors = errors + 1;
+                    end else begin
+                        expected_matched[selected_index] = 1'b1;
+                        matched_count = matched_count + 1;
+                    end
+                    if (!out_last) begin
+                        $display("ROUNDTRIP_ERROR SPARSE time missing LAST");
+                        errors = errors + 1;
+                    end
+                    decode_state = 0;
+                end
                 default: begin
                     $display("ROUNDTRIP_ERROR bad decoder state");
                     errors = errors + 1;
@@ -263,12 +309,12 @@ module tb_aer_roundtrip_random;
         // Directed same-tile test: the second event is held while ready=0.
         @(negedge clk);
         tile_on_flat[5*4 +: 4] = 4'h1;
-        tile_off_flat[5*4 +: 4] = 4'h2;
+        tile_off_flat[5*4 +: 4] = 4'h0;
         tile_in_valid[5] = 1'b1;
         @(negedge clk);
         tile_in_valid[5] = 1'b0;
         time_now = 16'd101;
-        tile_on_flat[5*4 +: 4] = 4'h4;
+        tile_on_flat[5*4 +: 4] = 4'h0;
         tile_off_flat[5*4 +: 4] = 4'h8;
         tile_in_valid[5] = 1'b1;
         low_ready_cycles = 0;

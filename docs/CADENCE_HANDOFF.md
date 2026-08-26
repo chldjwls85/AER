@@ -1,6 +1,6 @@
 # Cadence Handoff
 
-## Status: HOLD — NO-GO
+## Status: HOLD — quick gate PROMISING, full evaluation pending
 
 Cadence Xcelium, Genus and Innovus were not executed. The real-data gate did
 not justify PPA work: 1000x software efficiency improved 1.26%, dense RTL XSim

@@ -18,7 +18,7 @@
 | CIFAR10-DVS provenance | not found in any repository ref/history or local `AI-semi` files |
 | Evaluation date | 2026-08-21 (Asia/Seoul) |
 | UZH archive SHA-256 | `56aade6bf53dcf73e8fe40905ccac8385cd7606bc9a85103bf2c9f9045117551` |
-| Final decision | `NO-GO / More architecture work required` |
+| Current quick-gate decision | `PROMISING: proceed to full evaluation` |
 
 Pinned SHA를 primary comparison source로 사용한다. 팀 branch가 이후 변경되더라도
 평가 입력 RTL은 이 SHA에서 export해 재현성을 유지한다.

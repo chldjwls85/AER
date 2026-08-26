@@ -1,6 +1,24 @@
 # Packet Format
 
-모든 word는 16-bit이며 packet의 마지막 DATA word에서만 `out_last=1`이다.
+모든 word는 16-bit다. ROW/BANK packet은 마지막 DATA word에서, SPARSE
+packet은 TIME word에서 `out_last=1`이다.
+
+## SPARSE packet
+
+정확히 하나의 ON/OFF polarity bit만 set된 accepted tile transaction에 사용한다.
+
+| Word | Bits | Width | Meaning |
+|---|---|---:|---|
+| ADDRESS | `[15]` | 1 | `0`: SPARSE type |
+| ADDRESS | `[14:7]` | 8 | bank ID |
+| ADDRESS | `[6:3]` | 4 | local tile ID, 0..15 |
+| ADDRESS | `[2:1]` | 2 | pixel ID within 2x2, 0..3 |
+| ADDRESS | `[0]` | 1 | polarity, `1=ON`, `0=OFF` |
+| TIME | `[15:0]` | 16 | full timestamp; this word has `out_last=1` |
+
+ROW/BANK header는 `[15]=1`이므로 packet 시작점에서 SPARSE와 충돌하지 않는다.
+Decoder는 pixel ID의 one-hot bitmap을 polarity에 따라 ON 또는 OFF에 복원한다.
+full timestamp를 그대로 전달하므로 delta overflow나 fallback 조건은 없다.
 
 ## ROW packet
 

@@ -1,4 +1,4 @@
-"""Common-link cycle model for RAW, team BIN/GROUP, and ROW/BANK designs."""
+"""Common-link cycle model for RAW, team BIN/GROUP, and SPARSE/ROW/BANK."""
 
 from __future__ import annotations
 
@@ -120,7 +120,27 @@ class ArchitectureModel:
         assert all(record is not None for record in records)
         timestamps = [record.timestamp for record in records if record is not None]
         local_rows = sorted({(tile % 16) // 4 for tile in tiles})
-        use_bank = len(local_rows) >= 2 and max(timestamps) - min(timestamps) <= 31
+        nonbank_cost = 0
+        for row in local_rows:
+            row_tiles = [tile for tile in tiles if (tile % 16) // 4 == row]
+            sparse_count = sum(
+                1
+                for tile in row_tiles
+                if self.pending[tile] is not None
+                and self.pending[tile].transaction.canonical_event_count == 1
+            )
+            nonsparse_count = len(row_tiles) - sparse_count
+            row_cost = len(row_tiles) + 2
+            hybrid_cost = sparse_count * 2
+            if nonsparse_count:
+                hybrid_cost += nonsparse_count + 2
+            nonbank_cost += min(row_cost, hybrid_cost)
+        bank_cost = len(tiles) + 3
+        use_bank = (
+            len(local_rows) >= 2
+            and max(timestamps) - min(timestamps) <= 31
+            and bank_cost < nonbank_cost
+        )
         if use_bank:
             selected = sorted(tiles)
             words = [PacketWord(), PacketWord(), PacketWord()]
@@ -135,6 +155,19 @@ class ArchitectureModel:
             for tile in row_tiles
             if ((self.pending[tile].timestamp - base) & 0xFFFF) <= 31  # type: ignore[union-attr]
         )
+        sparse = [
+            tile
+            for tile in selected
+            if self.pending[tile] is not None
+            and self.pending[tile].transaction.canonical_event_count == 1
+        ]
+        nonsparse_count = len(selected) - len(sparse)
+        row_cost = len(selected) + 2
+        hybrid_cost = len(sparse) * 2
+        if nonsparse_count:
+            hybrid_cost += nonsparse_count + 2
+        if sparse and hybrid_cost <= row_cost:
+            return Packet(bank, "SPARSE", [PacketWord(), PacketWord((sparse[0],))])
         words = [PacketWord(), PacketWord()]
         words.extend(PacketWord((tile,)) for tile in selected)
         return Packet(bank, "ROW", words)
@@ -262,11 +295,14 @@ class ArchitectureModel:
             "max_pending_tiles": self.max_pending,
             "row_packets": self.packet_counts.get("ROW", 0),
             "bank_packets": self.packet_counts.get("BANK", 0),
+            "sparse_packets": self.packet_counts.get("SPARSE", 0),
             "raw8_count": self.format_counts.get("RAW8", 0),
             "group3_count": self.format_counts.get("GROUP3", 0),
             "bin4_count": self.format_counts.get("BIN4", 0),
             "bin_pair_words": self.format_counts.get("BIN_PAIR_WORD", 0),
             "bank_mode_fraction": self.packet_counts.get("BANK", 0) / mode_total if mode_total else 0.0,
+            "sparse_mode_fraction": self.packet_counts.get("SPARSE", 0) / mode_total if mode_total else 0.0,
+            "row_mode_fraction": self.packet_counts.get("ROW", 0) / mode_total if mode_total else 0.0,
             "backpressure_cycles": 0,
             "elapsed_cycles": elapsed,
         }

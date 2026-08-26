@@ -3,7 +3,8 @@
 // 8x8-pixel bank packetizer.
 // Input granularity is sixteen 2x2-pixel tiles arranged as 4 rows x 4 columns.
 //
-// Two lossless packet formats are selected automatically:
+// Three lossless packet formats are selected automatically:
+//   SPARSE packet: one polarity bit in one tile, full timestamp in two words.
 //   ROW packet  : used when pending events occupy one tile-row.
 //   BANK packet : used when >=2 rows are active and all timestamps are within
 //                 MAX_BANK_DELTA clocks. Bank ID/timestamp are then shared.
@@ -37,6 +38,8 @@ module aer_bank_packetizer #(
     localparam [3:0] ST_BANK_MASK   = 4'd6;
     localparam [3:0] ST_BANK_TIME   = 4'd7;
     localparam [3:0] ST_BANK_DATA   = 4'd8;
+    localparam [3:0] ST_SPARSE_ADDR = 4'd9;
+    localparam [3:0] ST_SPARSE_TIME = 4'd10;
 
     reg [3:0] state;
     reg [15:0] pending;
@@ -50,6 +53,8 @@ module aer_bank_packetizer #(
     reg [1:0]  selected_row;
     reg [4:0]  packet_tile_count;
     reg        packet_bank_mode;
+    reg [1:0]  sparse_pixel;
+    reg        sparse_polarity;
 
     reg [15:0] accept_mask;
     reg [15:0] clear_mask;
@@ -72,6 +77,16 @@ module aer_bank_packetizer #(
     reg analysis_row_first_time;
     reg [15:0] analysis_row_mask;
     reg analysis_use_bank;
+    reg analysis_use_sparse;
+    reg [3:0] analysis_sparse_tile;
+    reg [7:0] analysis_nonbank_cost;
+    reg [7:0] analysis_bank_cost;
+    integer analysis_row_tiles;
+    integer analysis_row_sparse;
+    integer analysis_row_nonsparse;
+    integer analysis_row_cost;
+    integer analysis_hybrid_cost;
+    integer analysis_event_bits;
 
     // Current DATA-word selection.
     reg [3:0] selected_tile;
@@ -79,6 +94,16 @@ module aer_bank_packetizer #(
     reg [15:0] remaining_without_selected;
     reg [3:0] snapshot_columns;
     reg [15:0] selected_delta_full;
+
+    function [3:0] count_ones8;
+        input [7:0] bits;
+        integer bit_index;
+        begin
+            count_ones8 = 4'd0;
+            for (bit_index = 0; bit_index < 8; bit_index = bit_index + 1)
+                count_ones8 = count_ones8 + bits[bit_index];
+        end
+    endfunction
 
     assign pending_debug = pending;
     assign bank_mode_debug = packet_bank_mode;
@@ -108,6 +133,10 @@ module aer_bank_packetizer #(
         analysis_row_min_time = 16'hffff;
         analysis_row_first_time = 1'b1;
         analysis_row_mask = 16'b0;
+        analysis_use_sparse = 1'b0;
+        analysis_sparse_tile = 4'd0;
+        analysis_nonbank_cost = 8'd0;
+        analysis_bank_cost = 8'd0;
 
         for (scan_index = 0; scan_index < 16; scan_index = scan_index + 1) begin
             if (pending[scan_index]) begin
@@ -132,6 +161,33 @@ module aer_bank_packetizer #(
                     analysis_selected_row = row_index[1:0];
                     analysis_row_found = 1'b1;
                 end
+
+                // Exact alternative cost for this row when BANK is legal:
+                // either one ROW packet, or two-word SPARSE packets plus one
+                // ROW packet for the remaining non-sparse transactions.
+                analysis_row_tiles = 0;
+                analysis_row_sparse = 0;
+                analysis_row_nonsparse = 0;
+                for (scan_index = 0; scan_index < 16; scan_index = scan_index + 1) begin
+                    if (pending[scan_index] && ((scan_index / 4) == row_index)) begin
+                        analysis_event_bits = count_ones8({stored_on[scan_index],
+                                                          stored_off[scan_index]});
+                        analysis_row_tiles = analysis_row_tiles + 1;
+                        if (analysis_event_bits == 1)
+                            analysis_row_sparse = analysis_row_sparse + 1;
+                        else
+                            analysis_row_nonsparse = analysis_row_nonsparse + 1;
+                    end
+                end
+                analysis_row_cost = analysis_row_tiles + 2;
+                analysis_hybrid_cost = analysis_row_sparse * 2;
+                if (analysis_row_nonsparse != 0)
+                    analysis_hybrid_cost = analysis_hybrid_cost +
+                                           analysis_row_nonsparse + 2;
+                if (analysis_hybrid_cost <= analysis_row_cost)
+                    analysis_nonbank_cost = analysis_nonbank_cost + analysis_hybrid_cost;
+                else
+                    analysis_nonbank_cost = analysis_nonbank_cost + analysis_row_cost;
             end
         end
 
@@ -155,11 +211,43 @@ module aer_bank_packetizer #(
             end
         end
 
-        // BANK packet cost is P+3 words versus P+2R for R row packets.
-        // Therefore any R>=2 saves at least one word, provided all deltas fit.
+
+        // For the first active row, choose a two-word SPARSE packet only when
+        // it is part of the minimum-cost non-BANK encoding.  A tie prefers the
+        // shorter packet lock.
+        analysis_row_tiles = 0;
+        analysis_row_sparse = 0;
+        analysis_row_nonsparse = 0;
+        for (scan_index = 0; scan_index < 16; scan_index = scan_index + 1) begin
+            if (analysis_row_mask[scan_index]) begin
+                analysis_event_bits = count_ones8({stored_on[scan_index],
+                                                    stored_off[scan_index]});
+                analysis_row_tiles = analysis_row_tiles + 1;
+                if (analysis_event_bits == 1) begin
+                    analysis_row_sparse = analysis_row_sparse + 1;
+                    if (!analysis_use_sparse) begin
+                        analysis_sparse_tile = scan_index[3:0];
+                        analysis_use_sparse = 1'b1;
+                    end
+                end else begin
+                    analysis_row_nonsparse = analysis_row_nonsparse + 1;
+                end
+            end
+        end
+        analysis_row_cost = analysis_row_tiles + 2;
+        analysis_hybrid_cost = analysis_row_sparse * 2;
+        if (analysis_row_nonsparse != 0)
+            analysis_hybrid_cost = analysis_hybrid_cost + analysis_row_nonsparse + 2;
+        analysis_use_sparse = analysis_use_sparse &&
+                              (analysis_hybrid_cost <= analysis_row_cost);
+
+        // BANK is selected only for a strict word saving over the best
+        // SPARSE/ROW mixture.  Equal cost keeps the shorter packet lock.
+        analysis_bank_cost = analysis_tile_count + 3;
         analysis_use_bank = (analysis_row_count >= 2) &&
                             !analysis_first_time &&
-                            ((analysis_max_time - analysis_min_time) <= MAX_BANK_DELTA);
+                            ((analysis_max_time - analysis_min_time) <= MAX_BANK_DELTA) &&
+                            (analysis_bank_cost < analysis_nonbank_cost);
     end
 
     // Pick the lowest remaining tile. Tile address is implicit from mask/order.
@@ -235,6 +323,18 @@ module aer_bank_packetizer #(
                     out_last = (remaining_without_selected == 16'b0);
                 end
             end
+            ST_SPARSE_ADDR: begin
+                // 0 | bank[7:0] | local tile[3:0] | pixel[1:0] | polarity
+                // polarity: 1=ON, 0=OFF
+                out_data = {1'b0, BANK_ID, selected_tile,
+                            sparse_pixel, sparse_polarity};
+                out_valid = 1'b1;
+            end
+            ST_SPARSE_TIME: begin
+                out_data = stored_time[selected_tile];
+                out_valid = 1'b1;
+                out_last = 1'b1;
+            end
             default: begin
                 out_data = 16'b0;
                 out_valid = 1'b0;
@@ -246,7 +346,8 @@ module aer_bank_packetizer #(
     // A tile is released when its DATA word is accepted.
     always @* begin
         clear_mask = 16'b0;
-        if ((state == ST_ROW_DATA || state == ST_BANK_DATA) &&
+        if ((state == ST_ROW_DATA || state == ST_BANK_DATA ||
+             state == ST_SPARSE_TIME) &&
             out_valid && out_ready && selected_tile_valid) begin
             clear_mask[selected_tile] = 1'b1;
         end
@@ -263,6 +364,8 @@ module aer_bank_packetizer #(
             selected_row <= 2'b0;
             packet_tile_count <= 5'b0;
             packet_bank_mode <= 1'b0;
+            sparse_pixel <= 2'b0;
+            sparse_polarity <= 1'b0;
         end else begin
             pending <= pending_after;
 
@@ -290,6 +393,32 @@ module aer_bank_packetizer #(
                         packet_tile_count <= analysis_tile_count;
                         packet_bank_mode <= 1'b1;
                         state <= ST_BANK_HEADER;
+                    end else if (analysis_use_sparse) begin
+                        snapshot_mask <= (16'b1 << analysis_sparse_tile);
+                        remaining_mask <= (16'b1 << analysis_sparse_tile);
+                        packet_bank_mode <= 1'b0;
+                        if (stored_on[analysis_sparse_tile] != 4'b0) begin
+                            sparse_polarity <= 1'b1;
+                            if (stored_on[analysis_sparse_tile][0])
+                                sparse_pixel <= 2'd0;
+                            else if (stored_on[analysis_sparse_tile][1])
+                                sparse_pixel <= 2'd1;
+                            else if (stored_on[analysis_sparse_tile][2])
+                                sparse_pixel <= 2'd2;
+                            else
+                                sparse_pixel <= 2'd3;
+                        end else begin
+                            sparse_polarity <= 1'b0;
+                            if (stored_off[analysis_sparse_tile][0])
+                                sparse_pixel <= 2'd0;
+                            else if (stored_off[analysis_sparse_tile][1])
+                                sparse_pixel <= 2'd1;
+                            else if (stored_off[analysis_sparse_tile][2])
+                                sparse_pixel <= 2'd2;
+                            else
+                                sparse_pixel <= 2'd3;
+                        end
+                        state <= ST_SPARSE_ADDR;
                     end else begin
                         snapshot_mask <= analysis_row_mask;
                         remaining_mask <= analysis_row_mask;
@@ -347,6 +476,21 @@ module aer_bank_packetizer #(
                             else
                                 state <= ST_IDLE;
                         end
+                    end
+                end
+
+                ST_SPARSE_ADDR: begin
+                    if (out_valid && out_ready)
+                        state <= ST_SPARSE_TIME;
+                end
+
+                ST_SPARSE_TIME: begin
+                    if (out_valid && out_ready) begin
+                        remaining_mask <= 16'b0;
+                        if (|pending_after)
+                            state <= ST_ANALYZE;
+                        else
+                            state <= ST_IDLE;
                     end
                 end
 

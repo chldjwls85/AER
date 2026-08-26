@@ -1,14 +1,15 @@
 {
-  "accepted_transactions": 533,
-  "decoded_transactions": 533,
+  "accepted_transactions": 649,
+  "decoded_transactions": 649,
   "design": "current_adaptive",
   "extra_transactions": 0,
   "missing_transactions": 0,
   "mode_counts": {
-    "BANK": 21,
-    "ROW": 460
+    "BANK": 2,
+    "ROW": 2,
+    "SPARSE": 639
   },
-  "output_words": 1516,
+  "output_words": 1298,
   "roundtrip_pass": true,
   "window": "dense"
 }

@@ -61,7 +61,7 @@ module tb_aer_top;
                 errors = errors + 1;
             end
             tile_on_flat[0*4 +: 4] = 4'b0001;
-            tile_off_flat[0*4 +: 4] = 4'b0000;
+            tile_off_flat[0*4 +: 4] = 4'b1000;
             tile_on_flat[4*4 +: 4] = 4'b0010;
             tile_off_flat[4*4 +: 4] = 4'b0100;
             tile_in_valid[0] = 1'b1;
@@ -224,7 +224,7 @@ module tb_aer_top;
                      packet_words[0]);
             errors = errors + 1;
         end
-        if ((packet_words[3] !== 16'h0080) ||
+        if ((packet_words[3] !== 16'h00c0) ||
             (packet_words[4] !== 16'h0120)) begin
             $display("TB_ERROR TEST1: payload mismatch %h %h",
                      packet_words[3], packet_words[4]);

@@ -1,7 +1,7 @@
-# Lossless Adaptive AER Packet Readout
+# Lossless SPARSE/ROW/BANK Adaptive AER Packet Readout
 
 이 저장소는 128×128 polarity-event sensor의 16-bit global link를 위한
-ROW/BANK adaptive packetization RTL과 재현 가능한 검증·평가 환경이다.
+SPARSE/ROW/BANK adaptive packetization RTL과 재현 가능한 검증·평가 환경이다.
 
 기존 RAW AER는 event마다 주소와 timestamp를 반복해 dense traffic에서 링크
 효율이 낮다. 팀 2차 설계는 같은 계층에서 RAW8/GROUP3/BIN4를 선택하지만,
@@ -13,7 +13,7 @@ GROUP3와 단독 BIN4는 여전히 DATA word 하나를 사용하며 BIN4 두 개
 128×128 pixels
   -> 2×2 tile: ON[3:0], OFF[3:0]
   -> 4×4 tiles / bank = 8×8 pixels
-  -> lossless ROW or BANK packet
+  -> lossless SPARSE, ROW or BANK packet
   -> 4×4-bank regional packet mux
   -> 2-entry elastic buffer
   -> root packet mux
@@ -22,8 +22,10 @@ GROUP3와 단독 BIN4는 여전히 DATA word 하나를 사용하며 BIN4 두 개
 
 ## Adaptive rule
 
-- 한 row만 active이거나 timestamp span이 31 clocks를 넘으면 ROW packet을 쓴다.
-- 두 row 이상이 active이고 전체 span이 31 clocks 이하이면 BANK packet을 쓴다.
+- ON/OFF 전체에서 polarity bit가 하나뿐인 tile은 2-word SPARSE 후보가 된다.
+- 각 row의 ROW cost와 SPARSE/ROW 혼합 cost, 전체 BANK cost를 비교한다.
+- BANK는 delta가 31 이하이고 혼합 대안보다 실제 word가 적을 때만 쓴다.
+- 같은 cost면 packet lock이 짧은 SPARSE/ROW를 우선한다.
 - BANK DATA는 tile ID 오름차순이며 16-bit tile mask가 위치를 복원한다.
 - DATA word는 `delta[4:0]`, `ON[3:0]`, `OFF[3:0]`를 보존한다.
 - binning, GROUP3, BIN4 또는 의도적 lossy compression은 사용하지 않는다.
@@ -52,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1
 `bin` directory를 지정한다. 모든 test는 compile/elaboration/simulation과 PASS
 token을 확인하며 한 test라도 실패하면 non-zero로 종료한다.
 
-현재 suite는 5개 self-checking top으로 구성되며 기본 ROW/BANK format,
+현재 suite는 5개 self-checking top으로 구성되며 SPARSE/ROW/BANK format,
 timestamp 31/32 boundary, 128×128 elaboration, reset recovery, random
 backpressure, sustained four-bank contention, same-tile backpressure와 2,050건
 decoder round-trip을 검사한다. 결과는 `results/logs/regression_summary.txt`에
@@ -78,16 +80,15 @@ merge하지 않는다.
 
 - 기능 regression: 5/5 PASS
 - random accepted-to-decoded round-trip: 2,050/2,050
-- 실제 UZH RTL window: 9/9 compile/elaboration/simulation/round-trip PASS
-- 1000x software words/accepted-event: RAW/Team 2.9313, Current 2.8943
-  (1.26% improvement)
-- dense XSim words/accepted-transaction: RAW/Team 2.9519, Current 2.8443
-  (3.65% improvement)
-- sparse XSim: 모두 3.0000으로 동일
+- quick 1x software words/event: RAW/Team 2.9944, Current 1.9990
+- quick 1000x software words/accepted-event: RAW/Team 2.9313, Current 1.9960
+- quick 1000x P99: 이전 ROW/BANK 6,380, Current 2,577 cycles
+- dense XSim: RAW/Team 2.9519 (기존 pinned 결과), Current 2.0000 words/transaction
+- dense Current round-trip: 649/649, missing/extra 0/0
 
-현재 결론은 **NO-GO / More architecture work required**다. 기능은 안정적이지만
-실제 데이터 효율이 practical 10% gate에 못 미치고 accelerated-load latency가
-악화됐다. Cadence tool은 실행하지 않았다.
+Quick gate 결론은 **PROMISING: proceed to full evaluation**이다. 전체 speed sweep과
+추가 dataset 검증 전까지 Cadence handoff는 계속 보류하며 Cadence tool은 실행하지
+않았다.
 
 ## Reproducibility anchors
 
@@ -105,7 +106,7 @@ Exact SHA와 평가일은 [REFERENCE_VERSIONS.md](docs/REFERENCE_VERSIONS.md)에
 
 - tile마다 pending slot이 하나이므로 source가 `tile_in_ready`를 지켜야 한다.
 - output은 16-bit single global link라 지속적인 overload를 제거하지 못한다.
-- BANK delta는 5-bit이며 31 clocks를 넘으면 ROW fallback한다.
+- BANK/ROW delta는 5-bit이며 31 clocks를 넘으면 다른 lossless packet으로 fallback한다.
 - same-tile burst는 `ready=0` backpressure로 보존하지만 source-side queue가 필요하다.
 - 16-bit timestamp wrap-around를 가로지르는 grouping은 아직 별도 검증하지 않았다.
 - single global link와 얕은 pending storage 때문에 accelerated load에서 P99

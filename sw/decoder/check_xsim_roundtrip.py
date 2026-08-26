@@ -36,13 +36,29 @@ def tile_from(bank: int, row: int, column: int) -> int:
 
 def decode_current(words: list[tuple[int, bool]]) -> tuple[Counter[tuple[int, int, int, int]], dict[str, int]]:
     decoded: Counter[tuple[int, int, int, int]] = Counter()
-    modes = {"ROW": 0, "BANK": 0}
+    modes = {"SPARSE": 0, "ROW": 0, "BANK": 0}
     index = 0
     while index < len(words):
         header, last = words[index]
         if last:
             raise ValueError("header asserted last")
         index += 1
+        if (header >> 15) == 0:
+            modes["SPARSE"] += 1
+            bank = (header >> 7) & 0xFF
+            tile_local = (header >> 3) & 0xF
+            pixel = (header >> 1) & 0x3
+            polarity = header & 1
+            timestamp, last = words[index]
+            index += 1
+            if not last:
+                raise ValueError("SPARSE timestamp missing LAST")
+            bitmap = 1 << pixel
+            decoded[(bank * 16 + tile_local,
+                     bitmap if polarity else 0,
+                     0 if polarity else bitmap,
+                     timestamp)] += 1
+            continue
         bank = (header >> 6) & 0xFF
         kind = (header >> 14) & 0x3
         if kind == 3:

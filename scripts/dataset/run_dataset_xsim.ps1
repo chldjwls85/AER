@@ -1,6 +1,8 @@
 param(
     [string]$VivadoPath = "",
-    [string]$PythonPath = "C:\Users\AERO\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+    [string]$PythonPath = "C:\Users\AERO\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
+    [string[]]$DesignNames = @("raw_baseline","team_second","current_adaptive"),
+    [string[]]$WindowNames = @("sparse","dense","burst")
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,13 +66,18 @@ $designs = @(
     @{ Name="team_second"; Sources=$referenceSources; Defines=@("TEAM_BINNING") },
     @{ Name="current_adaptive"; Sources=$currentSources; Defines=@("CURRENT_DESIGN") }
 )
-$windows = @("sparse","dense","burst")
+$designs = @($designs | Where-Object { $DesignNames -contains $_.Name })
+$windows = @("sparse","dense","burst") | Where-Object { $WindowNames -contains $_ }
+if ($designs.Count -eq 0 -or $windows.Count -eq 0) {
+    throw "No dataset designs/windows selected"
+}
+$total = $designs.Count * $windows.Count
 $lines = @(
     "AER UZH representative-window XSim",
     "UTC=$([DateTime]::UtcNow.ToString('o'))",
     "VIVADO=$VivadoExe",
     "REFERENCE=da686477ca054faada5f66d369f1fb253b2bf562",
-    "TOTAL=9"
+    "TOTAL=$total"
 )
 $pass = 0
 New-Item -ItemType Directory -Force -Path $BuildRoot,$RawRoot,$MetricsRoot,(Split-Path -Parent $Summary) | Out-Null
@@ -127,7 +134,7 @@ foreach ($design in $designs) {
 }
 
 $lines += "PASS_COUNT=$pass"
-$lines += "FAIL_COUNT=$(9-$pass)"
+$lines += "FAIL_COUNT=$($total-$pass)"
 $lines += "AER_DATASET_XSIM_ALL_PASS"
 Set-Content -LiteralPath $Summary -Value $lines -Encoding utf8
 $lines | ForEach-Object { Write-Host $_ }

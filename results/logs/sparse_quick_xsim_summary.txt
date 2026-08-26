@@ -1,0 +1,16 @@
+AER SPARSE/ROW/BANK quick dense-window XSim
+VIVADO=C:\Xilinx\Vivado\2019.1\bin\vivado.bat
+WINDOW=UZH shapes_rotation 1000x dense representative window
+PASS current_adaptive compile
+PASS current_adaptive elaboration
+PASS current_adaptive simulation AER_DATASET_XSIM_PASS
+PASS current_adaptive roundtrip AER_DATASET_ROUNDTRIP_PASS
+ACCEPTED_TRANSACTIONS=649
+OUTPUT_WORDS=1298
+WORDS_PER_TRANSACTION=2.000000
+SPARSE_PACKETS=639
+ROW_PACKETS=2
+BANK_PACKETS=2
+MISSING_TRANSACTIONS=0
+EXTRA_TRANSACTIONS=0
+AER_SPARSE_QUICK_XSIM_PASS

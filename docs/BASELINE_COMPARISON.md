@@ -6,7 +6,7 @@
 |---|---|---|
 | Fair RAW | pinned `aer_v1_top`, `ENABLE_BINNING=0` (`aer_v1_raw_top_128` wrapper) | ROW + RAW8 |
 | Team second | pinned `aer_v1_top`, `ENABLE_BINNING=1` | ROW + RAW8/GROUP3/BIN4/BIN pair |
-| Current | `aer_top_128` | adaptive lossless ROW/BANK |
+| Current | `aer_top_128` | adaptive lossless SPARSE/ROW/BANK |
 
 All use 128x128 pixels, 2x2 ON/OFF tile input, 4x4 tiles/bank, one pending
 slot/tile, 16-bit valid/ready/last output, 100 MHz and the same canonical trace.
@@ -44,9 +44,19 @@ tiles, but those patterns do not occur here after cycle/tile canonicalization.
    generality is not established.
 10. The practical gate is not met.
 
-## Decision
+## Previous ROW/BANK decision
 
 **NO-GO / More architecture work required.** Functional correctness is strong,
 but representative real-data efficiency is below 10%, the best actual RTL
 window is 3.65%, and modeled P99 latency degrades under accelerated load.
 Cadence tools were not run.
+
+## Current SPARSE quick-gate decision
+
+SPARSE packet을 추가한 단일 개선 iteration은 1x에서 1.9990 words/event로 RAW
+2.9944 대비 33.24% 감소했고, 1000x에서 1.9960 words/accepted-event로 RAW
+2.9313 대비 31.91% 감소했다. 기존 dense XSim RAW 2.9519에 대해 새 RTL은
+2.0000 words/transaction으로 32.25% 감소했다. 1000x P99는 이전 Current의
+6,380에서 2,577 cycles로 완화됐지만 RAW 502보다는 높다. Quick gate 판단은
+**PROMISING: proceed to full evaluation**이며 전체 sweep 전에는 Cadence로
+넘어가지 않는다.
