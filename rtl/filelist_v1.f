@@ -1,4 +1,5 @@
 rtl/frontend/aer_timebase.v
+rtl/frontend/aer_pixel_pending_array.v
 rtl/v1/aer_tile_bitmap_encoder.v
 rtl/v1/aer_locked_rr_arbiter.v
 rtl/v1/aer_stream_fifo2.v

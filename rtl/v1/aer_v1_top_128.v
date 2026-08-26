@@ -8,7 +8,11 @@ module aer_v1_top #(
     parameter integer SENSOR_COLS      = 128,
     parameter integer REGION_BANK_ROWS = 4,
     parameter integer REGION_BANK_COLS = 4,
-    parameter integer ENABLE_BINNING   = 1
+    parameter integer ENABLE_BINNING   = 1,
+    parameter integer ENABLE_ROW_FUSION = 0,
+    parameter integer ENABLE_BANK_FUSION = 0,
+    parameter integer ENABLE_LOSSY_BINNING = 0,
+    parameter integer EXTERNAL_RX_TIMESTAMP = 0
 ) (
     input  wire                                                   clk,
     input  wire                                                   rst_n,
@@ -50,7 +54,11 @@ module aer_v1_top #(
             aer_bank_row_reader #(
                 .BANK_ID(bank_gen),
                 .EXTENDED_BANK_ID(USE_EXTENDED_BANK_ID),
-                .ENABLE_BINNING(ENABLE_BINNING)
+                .ENABLE_BINNING(ENABLE_BINNING),
+                .ENABLE_ROW_FUSION(ENABLE_ROW_FUSION),
+                .ENABLE_BANK_FUSION(ENABLE_BANK_FUSION),
+                .ENABLE_LOSSY_BINNING(ENABLE_LOSSY_BINNING),
+                .EXTERNAL_RX_TIMESTAMP(EXTERNAL_RX_TIMESTAMP)
             ) bank_i (
                 .clk           (clk),
                 .rst_n         (rst_n),
@@ -105,7 +113,11 @@ endmodule
 
 // Source-compatible wrapper for the original fixed-size top.
 module aer_v1_top_128 #(
-    parameter integer ENABLE_BINNING = 1
+    parameter integer ENABLE_BINNING = 1,
+    parameter integer ENABLE_ROW_FUSION = 0,
+    parameter integer ENABLE_BANK_FUSION = 0,
+    parameter integer ENABLE_LOSSY_BINNING = 0,
+    parameter integer EXTERNAL_RX_TIMESTAMP = 0
 ) (
     input  wire          clk,
     input  wire          rst_n,
@@ -124,7 +136,11 @@ module aer_v1_top_128 #(
         .SENSOR_COLS(128),
         .REGION_BANK_ROWS(4),
         .REGION_BANK_COLS(4),
-        .ENABLE_BINNING(ENABLE_BINNING)
+        .ENABLE_BINNING(ENABLE_BINNING),
+        .ENABLE_ROW_FUSION(ENABLE_ROW_FUSION),
+        .ENABLE_BANK_FUSION(ENABLE_BANK_FUSION),
+        .ENABLE_LOSSY_BINNING(ENABLE_LOSSY_BINNING),
+        .EXTERNAL_RX_TIMESTAMP(EXTERNAL_RX_TIMESTAMP)
     ) parameterized_top_i (
         .clk           (clk),
         .rst_n         (rst_n),

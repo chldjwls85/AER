@@ -4,7 +4,9 @@
 // The hierarchy, buffering, arbitration, timestamp contract, packet width,
 // and output handshake are shared with the adaptive mode. Only the tile
 // encoder is forced to lossless RAW8 for every non-empty 2x2 snapshot.
-module aer_v1_raw_top_128 (
+module aer_v1_raw_top_128 #(
+    parameter integer EXTERNAL_RX_TIMESTAMP = 0
+) (
     input  wire           clk,
     input  wire           rst_n,
     input  wire [4095:0]  tile_in_valid,
@@ -18,7 +20,8 @@ module aer_v1_raw_top_128 (
 );
 
     aer_v1_top_128 #(
-        .ENABLE_BINNING(0)
+        .ENABLE_BINNING(0),
+        .EXTERNAL_RX_TIMESTAMP(EXTERNAL_RX_TIMESTAMP)
     ) shared_core_i (
         .clk           (clk),
         .rst_n         (rst_n),

@@ -64,14 +64,21 @@ function Invoke-XsimTest {
             throw "xelab failed for $Top with exit code $LASTEXITCODE."
         }
 
-        & $xsim $snapshot '--runall'
-        if ($LASTEXITCODE -ne 0) {
+        $simulationOutput = & $xsim $snapshot '--runall' 2>&1
+        $simulationOutput | ForEach-Object { Write-Host $_ }
+        if (($LASTEXITCODE -ne 0) -or
+            ($simulationOutput -match '[A-Z0-9_]+_FAIL')) {
             throw "xsim failed for $Top with exit code $LASTEXITCODE."
         }
     } finally {
         Pop-Location
     }
 }
+
+Invoke-XsimTest 'tb_aer_pixel_pending_array_depth2' @(
+    'rtl\frontend\aer_pixel_pending_array.v',
+    'tb\v1\tb_aer_pixel_pending_array_depth2.v'
+)
 
 Invoke-XsimTest 'tb_aer_tile_bitmap_encoder' @(
     'rtl\v1\aer_tile_bitmap_encoder.v',
@@ -117,6 +124,27 @@ Invoke-XsimTest 'tb_aer_bank_packing_compare' @(
     'rtl\v1\aer_locked_rr_arbiter.v',
     'rtl\v1\aer_bank_row_reader.v',
     'tb\v1\tb_aer_bank_packing_compare.v'
+)
+
+Invoke-XsimTest 'tb_aer_bank_row_fusion' @(
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader.v',
+    'tb\v1\tb_aer_bank_row_fusion.v'
+)
+
+Invoke-XsimTest 'tb_aer_bank_fusion' @(
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader.v',
+    'tb\v1\tb_aer_bank_fusion.v'
+)
+
+Invoke-XsimTest 'tb_aer_bank_lossy_mixed' @(
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader.v',
+    'tb\v1\tb_aer_bank_lossy_mixed.v'
 )
 
 Invoke-XsimTest 'tb_aer_v1_top_128' @(

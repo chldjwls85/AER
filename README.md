@@ -38,10 +38,12 @@ sh scripts/check_yosys.sh
 
 ## 크기 가변형 균형 계층 RTL v1
 
-2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만듭니다. 센서 행·열 크기에 따라 뱅크 배열과 공간 selector 단계 수를 자동으로 계산하며, 각 selector의 fan-in은 기본 4×4 하위 블록으로 제한합니다. 선택된 패킷은 마지막 워드까지 유지하고, 각 단계의 2-entry FIFO와 look-ahead grant로 연속 전송을 지원합니다. 한 행의 BIN4 토큰은 두 개씩 16비트 워드에 패킹합니다.
+2×2 타일의 ON/OFF 비트맵을 받아 4×4타일 뱅크에서 행 패킷으로 만듭니다. 센서 행·열 크기에 따라 뱅크 배열과 공간 selector 단계 수를 자동으로 계산하며, 각 selector의 fan-in은 기본 4×4 하위 블록으로 제한합니다. 선택된 패킷은 마지막 워드까지 유지하고, 각 단계의 2-entry FIFO와 look-ahead grant로 연속 전송을 지원합니다. 손실형 모드에서는 같은 극성의 3-of-4와 4-of-4 타일을 같은 BIN으로 묶되, 실제 전송 워드가 줄어들 때만 적용하고 이득이 없으면 RAW로 복귀합니다.
 
 - [v1 구조와 패킷 규약](docs/AER_v1_RTL_구조.md)
 - [적응형 대 무비닝 RAW8 공정 비교 규약](docs/AER_v1_공정비교_규약.md)
+- [뱅크 융합 CIFAR10-DVS 비교](docs/AER_v1_뱅크융합_CIFAR_비교.md)
+- [손실형 RTL·XSim·합성 검증](docs/AER_손실형_RTL_XSim_합성_검증.md)
 - `rtl/v1/`: Verilog-2001 RTL
 - `tb/v1/`: 타일 부호기, BIN 패킹, 균형 selector, 크기 가변 및 128×128 시험
 
@@ -49,6 +51,13 @@ sh scripts/check_yosys.sh
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_v1_xsim.ps1
+```
+
+손실형 RTL을 실제 CIFAR10-DVS에 재생하거나 RAW와 한 뱅크 합성 결과를 비교하려면 다음을 실행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_v1_cifar10_pending_xsim.ps1 -Mode lossy -PixelFifoDepth 2 -MaxEvents 178165 -StartEvent 0 -PlaybackSpeed 1297.016861 -ClockHz 100000000 -Frames 0
+powershell -ExecutionPolicy Bypass -File scripts/run_v1_lossy_synth.ps1
 ```
 
 Xcelium 환경에서는 다음을 실행합니다.
@@ -62,6 +71,20 @@ sh scripts/run_v1_xcelium.sh
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/open_v1_xsim_wave.ps1
 ```
+
+UZH `shapes_rotation`의 실제 이벤트를 중앙 128×128 영역으로 잘라 2×2 ON/OFF 비트맵으로 변환하고, XSim 출력 패킷을 다시 영상으로 복원하려면 다음을 실행합니다. 기본값은 5,000개의 실제 이벤트를 5,000배속으로 재생하는 혼잡 시험입니다. 배속은 입력 시간만 압축하며 공간 좌표와 polarity는 바꾸지 않습니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_v1_uzh_xsim.ps1
+```
+
+처음 구간 대신 앞 20만 개 입력에서 가장 조밀한 20 ms를 골라 시험하려면 다음처럼 실행합니다. 아래 100,000배 조건에서는 100 MHz의 1클록이 원본 시간 1 ms에 해당하므로, 같은 타일로 묶이는 이벤트의 시간 간격도 1 ms 미만으로 제한됩니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_v1_uzh_xsim.ps1 -DensestWindowMs 20 -ScanInputEvents 200000 -PlaybackSpeed 100000
+```
+
+결과에는 원본과 AER 수신 재구성을 나란히 보여주는 PNG 프레임, 움직이는 WebP, MP4와 지연·패킷 무결성 요약이 포함됩니다. 긴 1배속 추적은 수천만 클록이 필요하므로 기능 확인에는 배속 시험을 사용하고, 결과 시간축은 원래 데이터셋 시간으로 환산합니다.
 
 ## 사전 소프트웨어 검증
 

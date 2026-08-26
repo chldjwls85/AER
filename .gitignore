@@ -37,6 +37,9 @@ work/
 *.jou
 *.pb
 *.rpt.tmp
+/xelab.log
+/xvlog.log
+/vivado.log
 genus_work/
 innovus_work/
 
