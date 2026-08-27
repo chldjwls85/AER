@@ -84,7 +84,7 @@ while {[gets $filelist_handle line] >= 0} {
 close $filelist_handle
 
 stage_start read_hdl
-read_hdl $rtl_sources
+read_hdl -sv $rtl_sources
 stage_done read_hdl
 
 stage_start elaborate
