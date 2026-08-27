@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$Top,
     [Parameter(Mandatory = $true)][string]$ExpectedToken,
-    [string]$VivadoPath = ""
+    [string]$VivadoPath = "",
+    [ValidateSet("v3", "v4")][string]$Design = "v3",
+    [switch]$Quiet
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,6 +52,7 @@ foreach ($tool in @($xvlog, $xelab, $xsim)) {
 
 $testbench = switch ($Top) {
     "tb_aer_bank_packetizer" { "tb\unit\tb_aer_bank_packetizer.v" }
+    "tb_aer_bank_packetizer_v4" { "tb\unit\tb_aer_bank_packetizer_v4.v" }
     "tb_aer_top" { "tb\regression\tb_aer_top.v" }
     "tb_aer_top_128_smoke" { "tb\regression\tb_aer_top_128_smoke.v" }
     "tb_aer_protocol_stress" { "tb\regression\tb_aer_protocol_stress.v" }
@@ -57,13 +60,15 @@ $testbench = switch ($Top) {
     default { throw "No testbench path registered for top '$Top'." }
 }
 
-$rtlSources = Get-Content -LiteralPath (Join-Path $RootDir "rtl\filelist.f") |
+$filelistName = if ($Design -eq "v4") { "rtl\filelist_v4.f" } else { "rtl\filelist.f" }
+$rtlSources = Get-Content -LiteralPath (Join-Path $RootDir $filelistName) |
     Where-Object { $_ -and -not $_.TrimStart().StartsWith("#") } |
     ForEach-Object { Join-Path $RootDir $_ }
 $sources = @($rtlSources) + @(Join-Path $RootDir $testbench)
 
-$testDir = Join-Path $BuildRoot $Top
-$log = Join-Path $LogRoot ("xsim_" + $Top + ".log")
+$designSuffix = if ($Design -eq "v4") { "_v4" } else { "" }
+$testDir = Join-Path $BuildRoot ($Top + $designSuffix)
+$log = Join-Path $LogRoot ("xsim_" + $Top + $designSuffix + ".log")
 New-Item -ItemType Directory -Force -Path $BuildRoot,$LogRoot | Out-Null
 if (Test-Path -LiteralPath $testDir) {
     $resolvedBuild = (Resolve-Path $BuildRoot).Path
@@ -74,7 +79,7 @@ if (Test-Path -LiteralPath $testDir) {
     Remove-Item -LiteralPath $resolvedTest -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $testDir | Out-Null
-Set-Content -LiteralPath $log -Value "TOP=$Top`nVIVADO=$VivadoExe`n" -Encoding utf8
+Set-Content -LiteralPath $log -Value "TOP=$Top`nDESIGN=$Design`nVIVADO=$VivadoExe`n" -Encoding utf8
 
 function Invoke-LoggedTool {
     param(
@@ -87,10 +92,13 @@ function Invoke-LoggedTool {
     Add-Content -LiteralPath $log -Value $heading -Encoding utf8
     $output = & $Command @Arguments 2>&1
     $exitCode = $LASTEXITCODE
-    $output | ForEach-Object { Write-Host $_ }
     Add-Content -LiteralPath $log -Value $output -Encoding utf8
     if ($exitCode -ne 0) {
+        $output | Select-Object -Last 80 | ForEach-Object { Write-Host $_ }
         throw "$Name failed for $Top with exit code $exitCode. See $log"
+    }
+    if (-not $Quiet) {
+        $output | ForEach-Object { Write-Host $_ }
     }
     $marker = "${Name}_PASS"
     Write-Host $marker
@@ -99,7 +107,12 @@ function Invoke-LoggedTool {
 
 Push-Location $testDir
 try {
-    Invoke-LoggedTool -Name "COMPILE" -Command $xvlog -Arguments (@("--work", "work") + $sources)
+    $compileArguments = @("--work", "work")
+    if ($Design -eq "v4") {
+        $compileArguments += @("-d", "V4_DESIGN")
+    }
+    $compileArguments += $sources
+    Invoke-LoggedTool -Name "COMPILE" -Command $xvlog -Arguments $compileArguments
     $snapshot = "${Top}_snapshot"
     Invoke-LoggedTool -Name "ELABORATION" -Command $xelab -Arguments @("--debug", "typical", "--top", $Top, "--snapshot", $snapshot)
     Invoke-LoggedTool -Name "SIMULATION" -Command $xsim -Arguments @($snapshot, "--runall")

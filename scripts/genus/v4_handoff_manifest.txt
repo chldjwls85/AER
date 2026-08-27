@@ -1,0 +1,16 @@
+rtl/common/aer_timebase.v
+rtl/bank/aer_bank_packetizer_v4.v
+rtl/common/aer_packet_rr_arbiter.v
+rtl/fabric/aer_packet_mux.v
+rtl/common/aer_stream_buffer2.v
+rtl/fabric/aer_global_readout.v
+rtl/aer_top_v4.v
+rtl/filelist_v4.f
+constraints/aer_v4_100mhz.sdc
+scripts/genus/genus_v4_full.tcl
+scripts/genus/run_genus_v4.sh
+scripts/genus/server_setup_v3.example.tcl
+scripts/genus/io_constraints_v3.example.tcl
+scripts/genus/power_method_v3.example.tcl
+scripts/genus/v4_handoff_manifest.txt
+docs/GENUS_V4_HANDOFF.md

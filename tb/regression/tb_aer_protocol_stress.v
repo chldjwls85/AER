@@ -33,7 +33,11 @@ module tb_aer_protocol_stress;
     reg [15:0] stalled_data;
     reg stalled_last;
 
+`ifdef V4_DESIGN
+    aer_top_v4 #(
+`else
     aer_top #(
+`endif
         .SENSOR_ROWS(16),
         .SENSOR_COLS(16),
         .MAX_BANK_DELTA(31)

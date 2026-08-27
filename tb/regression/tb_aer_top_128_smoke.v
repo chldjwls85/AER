@@ -22,7 +22,11 @@ module tb_aer_top_128_smoke;
     integer errors;
     integer wait_index;
 
+`ifdef V4_DESIGN
+    aer_top_v4_128 dut (
+`else
     aer_top_128 dut (
+`endif
         .clk(clk), .rst_n(rst_n),
         .tile_in_valid(tile_in_valid),
         .tile_on_flat(tile_on_flat),

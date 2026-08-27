@@ -1,4 +1,4 @@
-"""Load UZH text events and build a common 2x2-tile input trace."""
+"""Build the common 2x2-tile trace used by dataset evaluations."""
 
 from __future__ import annotations
 
@@ -8,6 +8,16 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
+
+
+@dataclass(frozen=True)
+class CommonEvent:
+    """Dataset-loader output before clock quantization or spatial rebasing."""
+
+    timestamp: float
+    x: int
+    y: int
+    polarity: int
 
 
 @dataclass(frozen=True)
@@ -33,6 +43,79 @@ class TileTransaction:
         return self.on.bit_count() + self.off.bit_count()
 
 
+def load_uzh_events(path: Path, max_source_events: int = 200_000) -> list[CommonEvent]:
+    """Parse UZH text rows into the dataset-independent loader interface."""
+
+    events: list[CommonEvent] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            text = line.strip()
+            if not text or text.startswith("#"):
+                continue
+            timestamp, x, y, polarity = text.replace(",", " ").split()
+            events.append(
+                CommonEvent(
+                    timestamp=float(timestamp),
+                    x=int(x),
+                    y=int(y),
+                    polarity=1 if int(polarity) == 1 else 0,
+                )
+            )
+            if len(events) >= max_source_events:
+                break
+    if not events:
+        raise ValueError(f"no events in {path}")
+    return events
+
+
+def prepare_source_events(
+    events: Iterable[CommonEvent],
+    crop: tuple[int, int, int, int] | None,
+    clock_hz: float,
+    playback_speed: float = 1.0,
+) -> list[SourceEvent]:
+    """Quantize common events and optionally crop/rebase them."""
+
+    common_events = list(events)
+    if not common_events:
+        return []
+    if clock_hz <= 0 or playback_speed <= 0:
+        raise ValueError("clock_hz and playback_speed must be positive")
+
+    start_timestamp = common_events[0].timestamp
+    if crop is None:
+        x0 = y0 = 0
+        width = height = None
+    else:
+        x0, y0, width, height = crop
+        if width <= 0 or height <= 0:
+            raise ValueError("crop width and height must be positive")
+
+    selected: list[SourceEvent] = []
+    for event in common_events:
+        if event.polarity not in (0, 1):
+            raise ValueError(f"invalid polarity: {event.polarity}")
+        if width is not None and height is not None and not (
+            x0 <= event.x < x0 + width and y0 <= event.y < y0 + height
+        ):
+            continue
+        cycle = max(
+            0,
+            int((event.timestamp - start_timestamp) * clock_hz / playback_speed),
+        )
+        selected.append(
+            SourceEvent(
+                event_id=len(selected),
+                timestamp_s=event.timestamp - start_timestamp,
+                cycle=cycle,
+                x=event.x - x0,
+                y=event.y - y0,
+                polarity=event.polarity,
+            )
+        )
+    return selected
+
+
 def load_uzh_source(
     path: Path,
     max_source_events: int = 200_000,
@@ -43,41 +126,18 @@ def load_uzh_source(
     """Reproduce the pinned team loader order: limit, quantize, then crop."""
 
     x0, y0, width, height = crop
-    rows: list[tuple[float, int, int, int]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if not text or text.startswith("#"):
-                continue
-            timestamp, x, y, polarity = text.replace(",", " ").split()
-            rows.append((float(timestamp), int(x), int(y), int(polarity)))
-            if len(rows) >= max_source_events:
-                break
-    if not rows:
-        raise ValueError(f"no events in {path}")
-
-    start_timestamp = rows[0][0]
-    selected: list[SourceEvent] = []
-    for timestamp, x, y, polarity in rows:
-        if x0 <= x < x0 + width and y0 <= y < y0 + height:
-            cycle = max(
-                0,
-                int((timestamp - start_timestamp) * clock_hz / playback_speed),
-            )
-            selected.append(
-                SourceEvent(
-                    event_id=len(selected),
-                    timestamp_s=timestamp - start_timestamp,
-                    cycle=cycle,
-                    x=x - x0,
-                    y=y - y0,
-                    polarity=1 if polarity == 1 else 0,
-                )
-            )
+    common_events = load_uzh_events(path, max_source_events=max_source_events)
+    start_timestamp = common_events[0].timestamp
+    selected = prepare_source_events(
+        common_events,
+        crop=crop,
+        clock_hz=clock_hz,
+        playback_speed=playback_speed,
+    )
 
     metadata: dict[str, int | float | str] = {
         "dataset": "UZH shapes_rotation",
-        "source_rows_read": len(rows),
+        "source_rows_read": len(common_events),
         "cropped_source_events": len(selected),
         "crop_x": x0,
         "crop_y": y0,

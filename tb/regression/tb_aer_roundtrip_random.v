@@ -59,7 +59,11 @@ module tb_aer_roundtrip_random;
     reg found_match;
     integer bit_index;
 
+`ifdef V4_DESIGN
+    aer_bank_packetizer_v4 #(
+`else
     aer_bank_packetizer #(
+`endif
         .BANK_ID(8'd37),
         .MAX_BANK_DELTA(31)
     ) dut (
@@ -71,7 +75,11 @@ module tb_aer_roundtrip_random;
         .time_now(time_now),
         .out_data(out_data), .out_valid(out_valid),
         .out_ready(out_ready), .out_last(out_last),
+`ifdef V4_DESIGN
+        .pending_debug()
+`else
         .pending_debug(), .bank_mode_debug()
+`endif
     );
 
     always #5 clk = ~clk;

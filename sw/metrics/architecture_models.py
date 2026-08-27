@@ -10,6 +10,39 @@ from sw.dataset.canonical_trace import TileTransaction
 
 
 DESIGNS = ("raw_baseline", "team_second", "current_adaptive")
+FAIR_RAW_MAX_DELTA = 15
+CURRENT_MAX_DELTA = 31
+
+
+def row_only_word_cost(transaction_count: int) -> int:
+    """ROW header + base timestamp + one lossless DATA word per transaction."""
+
+    if transaction_count <= 0:
+        raise ValueError("transaction_count must be positive")
+    return transaction_count + 2
+
+
+def sparse_row_word_cost(sparse_count: int, nonsparse_count: int) -> int:
+    """Existing hybrid cost: two words/singleton plus optional ROW fallback."""
+
+    if (
+        sparse_count < 0
+        or nonsparse_count < 0
+        or sparse_count + nonsparse_count <= 0
+    ):
+        raise ValueError("packet must contain at least one transaction")
+    cost = sparse_count * 2
+    if nonsparse_count:
+        cost += row_only_word_cost(nonsparse_count)
+    return cost
+
+
+def bank_word_cost(transaction_count: int) -> int:
+    """BANK header + mask + base timestamp + one DATA word per transaction."""
+
+    if transaction_count <= 0:
+        raise ValueError("transaction_count must be positive")
+    return transaction_count + 3
 
 
 @dataclass
@@ -85,7 +118,7 @@ class ArchitectureModel:
         bank = transaction.tile_id // 16
         row = (transaction.tile_id % 16) // 4
         base = self.row_base[bank][row]
-        return base is None or ((timestamp - base) & 0xFFFF) <= 15
+        return base is None or ((timestamp - base) & 0xFFFF) <= FAIR_RAW_MAX_DELTA
 
     def accept(self, transaction: TileTransaction, cycle: int) -> None:
         timestamp = cycle & 0xFFFF
@@ -130,15 +163,13 @@ class ArchitectureModel:
                 and self.pending[tile].transaction.canonical_event_count == 1
             )
             nonsparse_count = len(row_tiles) - sparse_count
-            row_cost = len(row_tiles) + 2
-            hybrid_cost = sparse_count * 2
-            if nonsparse_count:
-                hybrid_cost += nonsparse_count + 2
+            row_cost = row_only_word_cost(len(row_tiles))
+            hybrid_cost = sparse_row_word_cost(sparse_count, nonsparse_count)
             nonbank_cost += min(row_cost, hybrid_cost)
-        bank_cost = len(tiles) + 3
+        bank_cost = bank_word_cost(len(tiles))
         use_bank = (
             len(local_rows) >= 2
-            and max(timestamps) - min(timestamps) <= 31
+            and max(timestamps) - min(timestamps) <= CURRENT_MAX_DELTA
             and bank_cost < nonbank_cost
         )
         if use_bank:
@@ -153,7 +184,9 @@ class ArchitectureModel:
         selected = sorted(
             tile
             for tile in row_tiles
-            if ((self.pending[tile].timestamp - base) & 0xFFFF) <= 31  # type: ignore[union-attr]
+            if (
+                (self.pending[tile].timestamp - base) & 0xFFFF  # type: ignore[union-attr]
+            ) <= CURRENT_MAX_DELTA
         )
         sparse = [
             tile
@@ -162,10 +195,8 @@ class ArchitectureModel:
             and self.pending[tile].transaction.canonical_event_count == 1
         ]
         nonsparse_count = len(selected) - len(sparse)
-        row_cost = len(selected) + 2
-        hybrid_cost = len(sparse) * 2
-        if nonsparse_count:
-            hybrid_cost += nonsparse_count + 2
+        row_cost = row_only_word_cost(len(selected))
+        hybrid_cost = sparse_row_word_cost(len(sparse), nonsparse_count)
         if sparse and hybrid_cost <= row_cost:
             return Packet(bank, "SPARSE", [PacketWord(), PacketWord((sparse[0],))])
         words = [PacketWord(), PacketWord()]
