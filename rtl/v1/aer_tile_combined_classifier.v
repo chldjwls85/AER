@@ -1,21 +1,20 @@
 `timescale 1ns/1ps
 
-module aer_tile_bitmap_encoder #(
-    parameter integer ENABLE_BINNING = 1
-) (
+// Minimal classifier for the fixed CARE-AER combined mode.
+//
+// Unlike aer_tile_bitmap_encoder, this block does not build a second payload
+// copy.  The optimized bank reader stores RAW8 once and keeps only the masks
+// needed by the SPARSE/lossy policy.
+module aer_tile_combined_classifier (
     input  wire [3:0] on_bitmap,
     input  wire [3:0] off_bitmap,
     output wire       has_event,
-    output reg  [1:0] format,
-    output reg  [7:0] payload,
-    output reg  [1:0] flags,
-    output reg        is_sparse,
+    output wire       bin_candidate,
+    output wire       lossy_candidate,
+    output wire       bin_polarity,
+    output reg        sparse_candidate,
     output reg  [2:0] sparse_payload
 );
-
-    localparam [1:0] FORMAT_RAW8   = 2'b00;
-    localparam [1:0] FORMAT_GROUP3 = 2'b01;
-    localparam [1:0] FORMAT_BIN4   = 2'b10;
 
     wire conflict;
     wire no_on;
@@ -25,8 +24,6 @@ module aer_tile_bitmap_encoder #(
     wire on_group3;
     wire off_group3;
 
-    reg [1:0] missing_pixel;
-    reg [3:0] active_bitmap;
     reg [1:0] sparse_pixel;
 
     assign has_event = |on_bitmap || |off_bitmap;
@@ -50,24 +47,15 @@ module aer_tile_bitmap_encoder #(
         (off_bitmap == 4'b0111)
     );
 
-    always @* begin
-        active_bitmap = on_group3 ? on_bitmap : off_bitmap;
-        case (~active_bitmap)
-            4'b0001: missing_pixel = 2'd0;
-            4'b0010: missing_pixel = 2'd1;
-            4'b0100: missing_pixel = 2'd2;
-            4'b1000: missing_pixel = 2'd3;
-            default: missing_pixel = 2'd0;
-        endcase
-    end
+    assign bin_candidate = !conflict &&
+                           (on_full || off_full || on_group3 || off_group3);
+    assign lossy_candidate = !conflict && (on_group3 || off_group3);
+    assign bin_polarity  = on_full || on_group3;
 
-    // The lossless SPARSE token shares this tile classifier with RAW/GROUP3/
-    // BIN4.  sparse_payload is {pixel[1:0], polarity}; it is independent of
-    // ENABLE_BINNING because it does not discard position information.
     always @* begin
-        is_sparse = 1'b0;
-        sparse_pixel = 2'd0;
+        sparse_candidate = 1'b0;
         sparse_payload = 3'b0;
+        sparse_pixel = 2'b0;
 
         case (on_bitmap)
             4'b0001: sparse_pixel = 2'd0;
@@ -82,7 +70,7 @@ module aer_tile_bitmap_encoder #(
              (on_bitmap == 4'b0010) ||
              (on_bitmap == 4'b0100) ||
              (on_bitmap == 4'b1000))) begin
-            is_sparse = 1'b1;
+            sparse_candidate = 1'b1;
             sparse_payload = {sparse_pixel, 1'b1};
         end else begin
             case (off_bitmap)
@@ -92,34 +80,14 @@ module aer_tile_bitmap_encoder #(
                 4'b1000: sparse_pixel = 2'd3;
                 default: sparse_pixel = 2'd0;
             endcase
+
             if (!conflict && no_on &&
                 ((off_bitmap == 4'b0001) ||
                  (off_bitmap == 4'b0010) ||
                  (off_bitmap == 4'b0100) ||
                  (off_bitmap == 4'b1000))) begin
-                is_sparse = 1'b1;
+                sparse_candidate = 1'b1;
                 sparse_payload = {sparse_pixel, 1'b0};
-            end
-        end
-    end
-
-    always @* begin
-        format  = FORMAT_RAW8;
-        payload = {on_bitmap, off_bitmap};
-        // flags[1] marks an ON/OFF conflict in the same pixel.
-        flags   = {conflict, 1'b0};
-
-        if (ENABLE_BINNING != 0) begin
-            if (!conflict && (on_full || off_full)) begin
-                format  = FORMAT_BIN4;
-                // payload[7]: 1=ON, 0=OFF. Count is implicitly four.
-                payload = {on_full, 7'b0};
-                flags   = 2'b00;
-            end else if (!conflict && (on_group3 || off_group3)) begin
-                format  = FORMAT_GROUP3;
-                // payload[7]: polarity, payload[6:5]: missing pixel index.
-                payload = {on_group3, missing_pixel, 5'b0};
-                flags   = 2'b00;
             end
         end
     end

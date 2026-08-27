@@ -115,6 +115,7 @@ module aer_spatial_selector_level #(
             wire                                selected_valid;
             wire                                selected_ready;
             wire                                selected_last;
+            wire [1:0]                          unused_fifo_level;
 
             genvar group_input;
             for (group_input = 0;
@@ -169,7 +170,8 @@ module aer_spatial_selector_level #(
                 .out_data  (out_data_flat[output_node*DATA_WIDTH +: DATA_WIDTH]),
                 .out_valid (out_valid[output_node]),
                 .out_ready (out_ready[output_node]),
-                .out_last  (out_last[output_node])
+                .out_last  (out_last[output_node]),
+                .level     (unused_fifo_level)
             );
         end
     endgenerate

@@ -12,7 +12,8 @@ module aer_stream_fifo2 #(
     output wire [DATA_WIDTH-1:0] out_data,
     output wire                  out_valid,
     input  wire                  out_ready,
-    output wire                  out_last
+    output wire                  out_last,
+    output wire [1:0]            level
 );
 
     reg [DATA_WIDTH-1:0] data_mem [0:1];
@@ -25,6 +26,7 @@ module aer_stream_fifo2 #(
     wire pop;
 
     assign out_valid = (count != 2'd0);
+    assign level = count;
     assign out_data  = data_mem[read_pointer];
     assign out_last  = last_mem[read_pointer];
     assign pop       = out_valid && out_ready;

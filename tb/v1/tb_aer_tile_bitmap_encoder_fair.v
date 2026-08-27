@@ -9,11 +9,15 @@ module tb_aer_tile_bitmap_encoder_fair;
     wire [1:0] adaptive_format;
     wire [7:0] adaptive_payload;
     wire [1:0] adaptive_flags;
+    wire       adaptive_is_sparse;
+    wire [2:0] adaptive_sparse_payload;
 
     wire       raw_has_event;
     wire [1:0] raw_format;
     wire [7:0] raw_payload;
     wire [1:0] raw_flags;
+    wire       raw_is_sparse;
+    wire [2:0] raw_sparse_payload;
 
     aer_tile_bitmap_encoder #(
         .ENABLE_BINNING(1)
@@ -23,7 +27,9 @@ module tb_aer_tile_bitmap_encoder_fair;
         .has_event  (adaptive_has_event),
         .format     (adaptive_format),
         .payload    (adaptive_payload),
-        .flags      (adaptive_flags)
+        .flags      (adaptive_flags),
+        .is_sparse  (adaptive_is_sparse),
+        .sparse_payload(adaptive_sparse_payload)
     );
 
     aer_tile_bitmap_encoder #(
@@ -34,7 +40,9 @@ module tb_aer_tile_bitmap_encoder_fair;
         .has_event  (raw_has_event),
         .format     (raw_format),
         .payload    (raw_payload),
-        .flags      (raw_flags)
+        .flags      (raw_flags),
+        .is_sparse  (raw_is_sparse),
+        .sparse_payload(raw_sparse_payload)
     );
 
     task check_case;

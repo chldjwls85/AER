@@ -80,6 +80,7 @@ class _PacketPlan:
     selected_row: int
     payload_words: int
     false_positive_events: int
+    pack_group_bits: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,8 +187,9 @@ class _BankReader:
     BANK_BINMASK = "BANK_BINMASK"
     BANK_DATA = "BANK_DATA"
 
-    def __init__(self, *, lossy: bool) -> None:
+    def __init__(self, *, lossy: bool, sparse: bool = False) -> None:
         self.lossy = lossy
+        self.sparse = sparse
         self.pending: dict[int, _TileSnapshot] = {}
         self.pending_mask = 0
         self.state = self.IDLE
@@ -195,6 +197,13 @@ class _BankReader:
         self.plan: _PacketPlan | None = None
         self.remaining_tiles: set[int] = set()
         self.payload_words_remaining = 0
+        self.pack_bit_count = 0
+        self.pack_group = 0
+        self.pack_scan_done = False
+
+    @staticmethod
+    def _is_sparse(snapshot: _TileSnapshot) -> bool:
+        return (snapshot.on_bitmap | snapshot.off_bitmap).bit_count() == 1
 
     def tile_ready(self, local_tile: int) -> bool:
         # The RTL deliberately does not accept a replacement on the same edge
@@ -211,10 +220,24 @@ class _BankReader:
 
         if self.lossy and len(candidate_tiles) > 1:
             row_counts = Counter(tile // 4 for tile in candidate_tiles)
-            row_cost = sum(1 + count for count in row_counts.values())
+            if self.sparse:
+                row_cost = 0
+                for active_row, count in row_counts.items():
+                    sparse_count = sum(
+                        self._is_sparse(candidate[tile])
+                        for tile in candidate_tiles
+                        if tile // 4 == active_row
+                    )
+                    nonsparse_count = count - sparse_count
+                    row_cost += sparse_count
+                    if nonsparse_count:
+                        row_cost += 1 + nonsparse_count
+            else:
+                row_cost = sum(1 + count for count in row_counts.values())
             raw_bank_cost = 2 + math.ceil(len(candidate_tiles) / 2)
             payload_bits = 0
             false_events = 0
+            lossy_widths: dict[int, int] = {}
             for tile in candidate_tiles:
                 snapshot = candidate[tile]
                 packet_format, width, introduced = classify_tile(
@@ -222,6 +245,7 @@ class _BankReader:
                 )
                 del packet_format
                 payload_bits += width
+                lossy_widths[tile] = width
                 false_events += introduced
             lossy_payload_words = math.ceil(payload_bits / 16)
             lossy_cost = 3 + lossy_payload_words
@@ -232,6 +256,13 @@ class _BankReader:
                     selected_row=row,
                     payload_words=lossy_payload_words,
                     false_positive_events=false_events,
+                    pack_group_bits=tuple(
+                        sum(
+                            lossy_widths.get(group * 4 + lane, 0)
+                            for lane in range(4)
+                        )
+                        for group in range(4)
+                    ),
                 )
             if raw_bank_cost < row_cost:
                 return _PacketPlan(
@@ -240,11 +271,31 @@ class _BankReader:
                     selected_row=row,
                     payload_words=math.ceil(len(candidate_tiles) / 2),
                     false_positive_events=0,
+                    pack_group_bits=tuple(
+                        8
+                        * sum(
+                            (group * 4 + lane) in candidate
+                            for lane in range(4)
+                        )
+                        for group in range(4)
+                    ),
                 )
 
         row_tiles = tuple(tile for tile in candidate_tiles if tile // 4 == row)
         if not row_tiles:
             raise AssertionError("granted RTL row has no candidate tiles")
+        if self.sparse:
+            sparse_tiles = tuple(
+                tile for tile in row_tiles if self._is_sparse(candidate[tile])
+            )
+            if sparse_tiles:
+                return _PacketPlan(
+                    mode="SPARSE",
+                    selected_tiles=(sparse_tiles[0],),
+                    selected_row=row,
+                    payload_words=0,
+                    false_positive_events=0,
+                )
         return _PacketPlan(
             mode="ROW_RAW",
             selected_tiles=row_tiles,
@@ -259,9 +310,12 @@ class _BankReader:
             row = self.row_arbiter.grant(requests)
             if row is None:
                 return _BankEval(None)
-            return _BankEval(_StreamWord(last=False), self._make_plan(accepts, row))
+            plan = self._make_plan(accepts, row)
+            return _BankEval(_StreamWord(last=plan.mode == "SPARSE"), plan)
         if self.state == self.HEADER_HOLD:
-            return _BankEval(_StreamWord(last=False))
+            return _BankEval(
+                _StreamWord(last=self.plan is not None and self.plan.mode == "SPARSE")
+            )
         if self.state == self.BANK_MASK:
             return _BankEval(_StreamWord(last=False))
         if self.state == self.BANK_BINMASK:
@@ -269,6 +323,11 @@ class _BankReader:
         if self.state == self.BANK_DATA:
             if self.payload_words_remaining <= 0:
                 raise AssertionError("bank DATA state has no payload")
+            if self.lossy and not (
+                self.pack_bit_count >= 16
+                or (self.pack_scan_done and self.pack_bit_count > 0)
+            ):
+                return _BankEval(None)
             return _BankEval(
                 _StreamWord(last=self.payload_words_remaining == 1)
             )
@@ -288,6 +347,8 @@ class _BankReader:
         evaluation: _BankEval,
         output_ready: bool,
     ) -> tuple[int, str | None]:
+        old_state = self.state
+        old_plan = self.plan
         word = evaluation.word
         handshake = word is not None and output_ready
         clear_tiles: set[int] = set()
@@ -297,7 +358,19 @@ class _BankReader:
         row_advance = (
             handshake
             and bool(word.last)
-            and self.state in (self.DATA, self.BANK_DATA)
+            and (
+                self.state in (self.DATA, self.BANK_DATA)
+                or (
+                    self.state == self.IDLE
+                    and evaluation.plan is not None
+                    and evaluation.plan.mode == "SPARSE"
+                )
+                or (
+                    self.state == self.HEADER_HOLD
+                    and self.plan is not None
+                    and self.plan.mode == "SPARSE"
+                )
+            )
         )
 
         introduced_false = 0
@@ -305,9 +378,18 @@ class _BankReader:
             self.plan = evaluation.plan
             self.remaining_tiles = set(evaluation.plan.selected_tiles)
             self.payload_words_remaining = evaluation.plan.payload_words
+            self.pack_bit_count = 0
+            self.pack_group = 0
+            self.pack_scan_done = False
             introduced_false = evaluation.plan.false_positive_events
             if handshake:
-                if evaluation.plan.mode == "ROW_RAW":
+                if evaluation.plan.mode == "SPARSE":
+                    clear_tiles.update(evaluation.plan.selected_tiles)
+                    completed_mode = evaluation.plan.mode
+                    self.remaining_tiles.clear()
+                    self.plan = None
+                    self.state = self.IDLE
+                elif evaluation.plan.mode == "ROW_RAW":
                     self.state = self.DATA
                 else:
                     self.state = self.BANK_MASK
@@ -316,7 +398,13 @@ class _BankReader:
         elif self.state == self.HEADER_HOLD and handshake:
             if self.plan is None:
                 raise AssertionError("held header lost its packet plan")
-            if self.plan.mode == "ROW_RAW":
+            if self.plan.mode == "SPARSE":
+                clear_tiles.update(self.remaining_tiles)
+                completed_mode = self.plan.mode
+                self.remaining_tiles.clear()
+                self.plan = None
+                self.state = self.IDLE
+            elif self.plan.mode == "ROW_RAW":
                 self.state = self.DATA
             else:
                 self.state = self.BANK_MASK
@@ -338,6 +426,9 @@ class _BankReader:
                 completed_mode = self.plan.mode if self.plan else None
                 self.remaining_tiles.clear()
                 self.payload_words_remaining = 0
+                self.pack_bit_count = 0
+                self.pack_group = 0
+                self.pack_scan_done = False
                 self.plan = None
                 self.state = self.IDLE
             else:
@@ -351,6 +442,33 @@ class _BankReader:
                 completed_mode = self.plan.mode if self.plan else None
                 self.plan = None
                 self.state = self.IDLE
+
+        # Match the bounded four-tile RTL packer.  It scans during a held bank
+        # header and the mask phases, drains one 16-bit word when accepted,
+        # and pauses under backpressure once a complete word is buffered.
+        if (
+            self.lossy
+            and old_plan is not None
+            and old_plan.mode in {"BANK_LOSSY", "BANK_RAW"}
+            and old_state != self.IDLE
+        ):
+            output_fire = old_state == self.BANK_DATA and handshake
+            base_count = self.pack_bit_count
+            if output_fire:
+                base_count = max(0, base_count - 16)
+            append = (
+                not self.pack_scan_done
+                and base_count <= 16
+                and not (output_fire and word is not None and word.last)
+            )
+            if append:
+                if self.pack_group >= len(old_plan.pack_group_bits):
+                    raise AssertionError("packer group index exceeds packet plan")
+                base_count += old_plan.pack_group_bits[self.pack_group]
+                self.pack_group += 1
+                if self.pack_group == len(old_plan.pack_group_bits):
+                    self.pack_scan_done = True
+            self.pack_bit_count = base_count
 
         for tile in clear_tiles:
             self.pending.pop(tile, None)
@@ -393,12 +511,15 @@ def simulate_rtl_cycle_exact(
 
     ``policy='raw'`` matches ``ENABLE_BINNING=0`` and no bank fusion.
     ``policy='lossy'`` matches ``ENABLE_BINNING=1``, ``ENABLE_BANK_FUSION=1``
-    and ``ENABLE_LOSSY_BINNING=1``.  ``out_ready`` is held high, as in the
+    and ``ENABLE_LOSSY_BINNING=1``. ``policy='combined'`` additionally enables
+    the one-word lossless SPARSE path. ``out_ready`` is held high, as in the
     CIFAR10-DVS XSim testbench.
     """
 
-    if policy not in {"raw", "lossy"}:
-        raise ValueError("cycle-exact RTL policy must be 'raw' or 'lossy'")
+    if policy not in {"raw", "lossy", "combined"}:
+        raise ValueError(
+            "cycle-exact RTL policy must be 'raw', 'lossy', or 'combined'"
+        )
     if clock_hz <= 0:
         raise ValueError("clock_hz must be positive")
     if not events:
@@ -444,7 +565,13 @@ def simulate_rtl_cycle_exact(
 
     pixel_queues: list[deque[_PixelEvent]] = [deque() for _ in range(pixel_count)]
     frontend_active: list[set[int]] = [set() for _ in range(bank_count)]
-    banks = [_BankReader(lossy=policy == "lossy") for _ in range(bank_count)]
+    banks = [
+        _BankReader(
+            lossy=policy in {"lossy", "combined"},
+            sparse=policy == "combined",
+        )
+        for _ in range(bank_count)
+    ]
 
     level1_arbiters = [_LockedRoundRobin(16) for _ in range(region_count)]
     level1_fifos = [_Fifo2() for _ in range(region_count)]
@@ -745,6 +872,7 @@ def compare_cifar10_dvs_cycle_exact(
         )
         raw = simulate_rtl_cycle_exact(events, "raw", config, clock_hz)
         lossy = simulate_rtl_cycle_exact(events, "lossy", config, clock_hz)
+        combined = simulate_rtl_cycle_exact(events, "combined", config, clock_hz)
         relative_reduction = (
             (raw.total_error_rate - lossy.total_error_rate)
             / raw.total_error_rate
@@ -753,7 +881,7 @@ def compare_cifar10_dvs_cycle_exact(
         )
         cases[str(clock_hz)] = {
             "selection": selection,
-            "results": [raw.as_dict(), lossy.as_dict()],
+            "results": [raw.as_dict(), lossy.as_dict(), combined.as_dict()],
             "lossy_vs_raw": {
                 "total_error_rate_reduction_percentage_points": 100
                 * (raw.total_error_rate - lossy.total_error_rate),
@@ -763,6 +891,19 @@ def compare_cifar10_dvs_cycle_exact(
                 / max(1, raw.accepted_events),
                 "output_word_reduction_percent": 100
                 * (raw.output_words - lossy.output_words)
+                / max(1, raw.output_words),
+            },
+            "combined_vs_raw": {
+                "total_error_rate_reduction_percentage_points": 100
+                * (raw.total_error_rate - combined.total_error_rate),
+                "relative_total_error_reduction_percent": 100
+                * (raw.total_error_rate - combined.total_error_rate)
+                / max(raw.total_error_rate, 1 / max(1, raw.input_events)),
+                "accepted_event_increase_percent": 100
+                * (combined.accepted_events - raw.accepted_events)
+                / max(1, raw.accepted_events),
+                "output_word_reduction_percent": 100
+                * (raw.output_words - combined.output_words)
                 / max(1, raw.output_words),
             },
         }
@@ -792,6 +933,13 @@ def _print_report(report: dict[str, object]) -> None:
         delta = case["lossy_vs_raw"]
         print(
             "lossy-vs-raw: "
+            f"{delta['total_error_rate_reduction_percentage_points']:+.4f}%p, "
+            f"relative {delta['relative_total_error_reduction_percent']:+.4f}%, "
+            f"words {delta['output_word_reduction_percent']:+.4f}%"
+        )
+        delta = case["combined_vs_raw"]
+        print(
+            "combined-vs-raw: "
             f"{delta['total_error_rate_reduction_percentage_points']:+.4f}%p, "
             f"relative {delta['relative_total_error_reduction_percent']:+.4f}%, "
             f"words {delta['output_word_reduction_percent']:+.4f}%"

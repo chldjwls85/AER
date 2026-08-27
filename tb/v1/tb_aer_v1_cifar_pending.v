@@ -6,6 +6,8 @@ module tb_aer_v1_cifar_pending #(
     parameter integer ENABLE_ROW_FUSION = 0,
     parameter integer ENABLE_BANK_FUSION = 0,
     parameter integer ENABLE_LOSSY_BINNING = 0,
+    parameter integer ENABLE_SPARSE = 0,
+    parameter integer USE_SHARED_ARCH = 0,
     parameter integer PIXEL_FIFO_DEPTH = 1
 );
 
@@ -87,24 +89,44 @@ module tb_aer_v1_cifar_pending #(
         .readout_event_count  (pixel_readout_count)
     );
 
-    aer_v1_top_128 #(
-        .ENABLE_BINNING(ENABLE_BINNING),
-        .ENABLE_ROW_FUSION(ENABLE_ROW_FUSION),
-        .ENABLE_BANK_FUSION(ENABLE_BANK_FUSION),
-        .ENABLE_LOSSY_BINNING(ENABLE_LOSSY_BINNING),
-        .EXTERNAL_RX_TIMESTAMP(1)
-    ) dut (
-        .clk           (clk),
-        .rst_n         (rst_n),
-        .tile_in_valid (tile_valid),
-        .tile_on_flat  (tile_on_flat),
-        .tile_off_flat (tile_off_flat),
-        .tile_in_ready (tile_ready),
-        .out_data      (out_data),
-        .out_valid     (out_valid),
-        .out_ready     (out_ready),
-        .out_last      (out_last)
-    );
+    generate
+        if (USE_SHARED_ARCH != 0) begin : gen_shared_dut
+            aer_v1_shared_top_128 #(
+                .ENABLE_COMPRESSION(ENABLE_BINNING)
+            ) dut (
+                .clk           (clk),
+                .rst_n         (rst_n),
+                .tile_in_valid (tile_valid),
+                .tile_on_flat  (tile_on_flat),
+                .tile_off_flat (tile_off_flat),
+                .tile_in_ready (tile_ready),
+                .out_data      (out_data),
+                .out_valid     (out_valid),
+                .out_ready     (out_ready),
+                .out_last      (out_last)
+            );
+        end else begin : gen_legacy_dut
+            aer_v1_top_128 #(
+                .ENABLE_BINNING(ENABLE_BINNING),
+                .ENABLE_ROW_FUSION(ENABLE_ROW_FUSION),
+                .ENABLE_BANK_FUSION(ENABLE_BANK_FUSION),
+                .ENABLE_LOSSY_BINNING(ENABLE_LOSSY_BINNING),
+                .ENABLE_SPARSE(ENABLE_SPARSE),
+                .EXTERNAL_RX_TIMESTAMP(1)
+            ) dut (
+                .clk           (clk),
+                .rst_n         (rst_n),
+                .tile_in_valid (tile_valid),
+                .tile_on_flat  (tile_on_flat),
+                .tile_off_flat (tile_off_flat),
+                .tile_in_ready (tile_ready),
+                .out_data      (out_data),
+                .out_valid     (out_valid),
+                .out_ready     (out_ready),
+                .out_last      (out_last)
+            );
+        end
+    endgenerate
 
     initial begin
         clk = 1'b0;
@@ -185,11 +207,17 @@ module tb_aer_v1_cifar_pending #(
                 $fdisplay(log_fd, "W %0d %04h %0d", data_cycle, out_data, out_last);
                 output_word_count = output_word_count + 1;
                 if (rx_phase == 0) begin
-                    if (out_last) begin
+                    if (!out_data[15]) begin
+                        if (!out_last) begin
+                            $display("AER_V1_CIFAR_PENDING_SPARSE_LAST_FAIL word=%h",
+                                out_data);
+                            $fatal(1);
+                        end
+                        decoded_tile_count = decoded_tile_count + 1;
+                    end else if (out_last) begin
                         $display("AER_V1_CIFAR_PENDING_HEADER_LAST_FAIL word=%h", out_data);
                         $fatal(1);
-                    end
-                    if (out_data[15:14] == 2'b11) begin
+                    end else if (out_data[15:14] == 2'b11) begin
                         rx_data_remaining = popcount4(out_data[3:0]);
                         rx_header_columns = rx_data_remaining;
                         rx_phase = 1;
@@ -359,9 +387,9 @@ module tb_aer_v1_cifar_pending #(
             $display("AER_V1_CIFAR_PENDING_LOG_OPEN_FAIL path=%0s", log_path);
             $fatal(1);
         end
-        $fdisplay(log_fd, "M %0d RX_TIMESTAMP ENABLE_BINNING=%0d ENABLE_ROW_FUSION=%0d ENABLE_BANK_FUSION=%0d PIXEL_FIFO_DEPTH=%0d",
+        $fdisplay(log_fd, "M %0d RX_TIMESTAMP ENABLE_BINNING=%0d ENABLE_ROW_FUSION=%0d ENABLE_BANK_FUSION=%0d ENABLE_SPARSE=%0d PIXEL_FIFO_DEPTH=%0d",
             event_count, ENABLE_BINNING, ENABLE_ROW_FUSION,
-            ENABLE_BANK_FUSION, PIXEL_FIFO_DEPTH);
+            ENABLE_BANK_FUSION, ENABLE_SPARSE, PIXEL_FIFO_DEPTH);
 
         repeat (5) @(posedge clk);
         #1 rst_n = 1'b1;
@@ -407,9 +435,9 @@ module tb_aer_v1_cifar_pending #(
             same_cycle_duplicate_count, pixel_readout_count,
             accepted_tile_count, decoded_tile_count, output_word_count);
         $fclose(log_fd);
-        $display("AER_V1_CIFAR_PENDING_PASS binning=%0d row_fusion=%0d bank_fusion=%0d lossy=%0d depth=%0d source=%0d accepted_pixel=%0d ignored=%0d duplicate=%0d tiles=%0d words=%0d cycles=%0d",
+        $display("AER_V1_CIFAR_PENDING_PASS binning=%0d row_fusion=%0d bank_fusion=%0d lossy=%0d sparse=%0d depth=%0d source=%0d accepted_pixel=%0d ignored=%0d duplicate=%0d tiles=%0d words=%0d cycles=%0d",
             ENABLE_BINNING, ENABLE_ROW_FUSION, ENABLE_BANK_FUSION,
-            ENABLE_LOSSY_BINNING,
+            ENABLE_LOSSY_BINNING, ENABLE_SPARSE,
             PIXEL_FIFO_DEPTH,
             event_count, pixel_accepted_count, pixel_ignored_count,
             same_cycle_duplicate_count, accepted_tile_count,
@@ -488,6 +516,55 @@ module tb_aer_v1_cifar_pending_lossy_d2;
         .ENABLE_BINNING(1),
         .ENABLE_BANK_FUSION(1),
         .ENABLE_LOSSY_BINNING(1),
+        .PIXEL_FIFO_DEPTH(2)
+    ) test_i ();
+endmodule
+
+module tb_aer_v1_cifar_pending_combined;
+    tb_aer_v1_cifar_pending #(
+        .ENABLE_BINNING(1),
+        .ENABLE_BANK_FUSION(1),
+        .ENABLE_LOSSY_BINNING(1),
+        .ENABLE_SPARSE(1)
+    ) test_i ();
+endmodule
+
+module tb_aer_v1_cifar_pending_combined_d2;
+    tb_aer_v1_cifar_pending #(
+        .ENABLE_BINNING(1),
+        .ENABLE_BANK_FUSION(1),
+        .ENABLE_LOSSY_BINNING(1),
+        .ENABLE_SPARSE(1),
+        .PIXEL_FIFO_DEPTH(2)
+    ) test_i ();
+endmodule
+
+module tb_aer_v1_cifar_pending_sharedraw;
+    tb_aer_v1_cifar_pending #(
+        .ENABLE_BINNING(0),
+        .USE_SHARED_ARCH(1)
+    ) test_i ();
+endmodule
+
+module tb_aer_v1_cifar_pending_sharedraw_d2;
+    tb_aer_v1_cifar_pending #(
+        .ENABLE_BINNING(0),
+        .USE_SHARED_ARCH(1),
+        .PIXEL_FIFO_DEPTH(2)
+    ) test_i ();
+endmodule
+
+module tb_aer_v1_cifar_pending_sharedcare;
+    tb_aer_v1_cifar_pending #(
+        .ENABLE_BINNING(1),
+        .USE_SHARED_ARCH(1)
+    ) test_i ();
+endmodule
+
+module tb_aer_v1_cifar_pending_sharedcare_d2;
+    tb_aer_v1_cifar_pending #(
+        .ENABLE_BINNING(1),
+        .USE_SHARED_ARCH(1),
         .PIXEL_FIFO_DEPTH(2)
     ) test_i ();
 endmodule

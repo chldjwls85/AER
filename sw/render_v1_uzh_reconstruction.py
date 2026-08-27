@@ -180,6 +180,35 @@ def decode_words(
 
     for receive_cycle, word, last in words:
         if phase == 0:
+            if (word >> 15) == 0:
+                sparse_bank = (word >> 7) & 0xFF
+                sparse_local_tile = (word >> 3) & 0xF
+                sparse_pixel = (word >> 1) & 0x3
+                sparse_polarity = word & 0x1
+                packet_receive_cycle = receive_cycle
+                headers += 1
+                if not external_rx_timestamp:
+                    errors.append(
+                        f"SPARSE packet requires external receive timestamps at cycle {receive_cycle}"
+                    )
+                if extended_bank_id:
+                    errors.append(
+                        f"SPARSE packet does not support extended bank IDs at cycle {receive_cycle}"
+                    )
+                if not last:
+                    errors.append(
+                        f"SPARSE packet did not assert out_last at cycle {receive_cycle}"
+                    )
+                sparse_bitmap = 1 << sparse_pixel
+                append_tile_decoded(
+                    sparse_bank * 16 + sparse_local_tile,
+                    "SPARSE",
+                    sparse_bitmap if sparse_polarity else 0,
+                    0 if sparse_polarity else sparse_bitmap,
+                    0,
+                    receive_cycle,
+                )
+                continue
             packet_type = word >> 14
             if packet_type == 0x2:
                 bank_id = (word >> 6) & 0xFF

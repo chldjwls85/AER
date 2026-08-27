@@ -2,7 +2,7 @@
 
 ## 1. 비교 목적
 
-타일 비닝과 상위 패킷 묶음의 효과를 분리해서 보기 위해 다섯 구조가 같은 데이터 경로를 공유한다. 계층과 중재기를 복사하지 않고 형식 선택 매개변수만 다르게 설정한다.
+타일 비닝과 상위 패킷 묶음의 효과를 분리해서 보기 위해 여섯 구조가 같은 데이터 경로를 공유한다. 계층과 중재기를 복사하지 않고 형식 선택 매개변수만 다르게 설정한다.
 
 ```text
 뱅크 융합: ENABLE_BINNING=1, ENABLE_ROW_FUSION=0, ENABLE_BANK_FUSION=1
@@ -10,7 +10,9 @@
 기존 비닝: ENABLE_BINNING=1, ENABLE_ROW_FUSION=0, ENABLE_BANK_FUSION=0
 무비닝:    ENABLE_BINNING=0, ENABLE_ROW_FUSION=0, ENABLE_BANK_FUSION=0
 손실형:    ENABLE_BINNING=1, ENABLE_ROW_FUSION=0, ENABLE_BANK_FUSION=1,
-           ENABLE_LOSSY_BINNING=1
+           ENABLE_LOSSY_BINNING=1, ENABLE_SPARSE=0
+결합형:    ENABLE_BINNING=1, ENABLE_ROW_FUSION=0, ENABLE_BANK_FUSION=1,
+           ENABLE_LOSSY_BINNING=1, ENABLE_SPARSE=1
 ```
 
 무비닝은 이벤트를 픽셀별 개수로 축약하지 않는다는 뜻이다. 한 번에 읽은 2×2 타일의 `ON[3:0]`과 `OFF[3:0]`을 8비트 RAW 비트맵으로 그대로 보존한다.
@@ -38,7 +40,9 @@
 
 픽셀 입력부의 `PIXEL_FIFO_DEPTH`는 1 또는 2로 설정할 수 있다. 2-entry 비교에서도 적응형과 무비닝 모두 깊이 2를 사용하며, 비닝 효과와 입력 버퍼 효과를 혼동하지 않는다. 같은 픽셀의 두 이벤트는 head와 tail에 순서대로 보관하고, 타일 handshake마다 head 한 개만 제거한다.
 
-CIFAR10-DVS 비교에서는 다섯 구조 모두 `EXTERNAL_RX_TIMESTAMP=1`을 사용한다. 모두 TIME 워드를 생략하고 수신기가 패킷 첫 헤더 워드의 도착 클록을 시각으로 기록한다. 무비닝 래퍼도 이 매개변수를 그대로 공유 core에 전달한다.
+CIFAR10-DVS 비교에서는 여섯 구조 모두 `EXTERNAL_RX_TIMESTAMP=1`을 사용한다. 모두 TIME 워드를 생략하고 수신기가 패킷 첫 헤더 워드의 도착 클록을 시각으로 기록한다. 무비닝 래퍼도 이 매개변수를 그대로 공유 core에 전달한다.
+
+결합형도 같은 입력·FIFO·중재·선택기·16비트 링크를 사용한다. 차이는 이벤트가 정확히 하나인 타일을 `SPARSE` 한 워드로 보내고, 혼잡한 뱅크에서는 기존 손실형 뱅크 패킷을 선택한다는 점뿐이다. SPARSE와 BIN을 한 패킷에 섞기 위한 추가 마스크는 두지 않는다.
 
 ## 3. 형식 선택 차이
 
@@ -62,6 +66,8 @@ CIFAR10-DVS 비교에서는 다섯 구조 모두 `EXTERNAL_RX_TIMESTAMP=1`을 �
 ```
 
 ## 4. 현재 비교에서 주장할 수 있는 것
+
+외부 수신 시각 모드에서 이벤트가 정확히 하나인 타일은 기존 행 RAW의 `HEADER+DATA` 두 워드 대신 `SPARSE` 한 워드를 사용한다. 이 절감은 위치와 극성을 모두 보존하므로 의도적 오차를 만들지 않는다. 반대로 3-of-4 손실형 BIN은 위치 하나를 버리므로 복원 오차에 포함한다.
 
 패킹할 수 없는 입력에서는 적응형과 RAW8이 모두 유효 타일 하나를 16비트 DATA 워드 하나로 전송한다. 이 경우 출력 워드 수, 헤더와 타임스탬프 수, 패킷 길이가 동일하다.
 
@@ -115,16 +121,18 @@ BIN4:   PAYLOAD = 1워드
 
 `tb_aer_bank_lossy_mixed.v`는 3-of-4와 4-of-4가 같은 BIN으로 섞여 패킹되는 경우, 손실형 비용 이득이 없는 행 RAW 복귀, 손실형과 RAW 뱅크의 비용 동률에서 무손실 RAW를 선택하는 경우를 Python 기준 워드와 대조한다.
 
+`tb_aer_bank_sparse_lossy.v`는 단일 이벤트가 한 워드 SPARSE로 출력되는지와, 같은 회로에서 혼잡한 RAW/BIN 혼합 뱅크가 기존 손실형 패킷과 동일한 다섯 워드로 출력되는지를 함께 검사한다.
+
 `tb_aer_v1_raw_top_128.v`는 무비닝 128×128 전체 연결에서 `ON=1111`이 BIN4가 아니라 RAW8 `0x03C0`으로 출력되는지 확인한다.
 
 `tb_aer_pixel_pending_array_depth2.v`는 같은 픽셀의 ON→OFF 순서, FIFO full 손실 계수, pop과 push의 동시 처리, 최종 drain을 검사한다.
 
-2026년 8월 26일 로컬 Vivado 2024.1 XSim에서 손실형 혼합 패킷을 포함한 기능 회귀 14개와 128×128 CIFAR10-DVS 통합시험이 통과했다. 실행 스크립트는 출력 문자열의 `_FAIL`도 실패로 처리한다. 한 뱅크 논리합성 결과는 [손실형 RTL·XSim·합성 검증](AER_손실형_RTL_XSim_합성_검증.md)에 기록한다.
+2026년 8월 27일 로컬 Vivado 2024.1 XSim에서 SPARSE·손실형 혼합 패킷을 포함한 기능 회귀 15개와 128×128 CIFAR10-DVS 통합시험이 통과했다. 실행 스크립트는 출력 문자열의 `_FAIL`도 실패로 처리한다. 한 뱅크 논리합성 결과는 [AER SPARSE·손실형 비닝 결합 검증](AER_SPARSE_손실형_결합_검증.md)에 기록한다.
 
 ## 6. 앞으로의 유지 규칙
 
 1. 계층, 버퍼, 중재, 타임스탬프 또는 패킷을 변경하면 공유 RTL에서 한 번만 수정한다.
-2. 각 구조의 `ENABLE_BINNING`, `ENABLE_ROW_FUSION`, `ENABLE_BANK_FUSION`, `ENABLE_LOSSY_BINNING` 조합을 위 표대로 유지한다.
+2. 각 구조의 `ENABLE_BINNING`, `ENABLE_ROW_FUSION`, `ENABLE_BANK_FUSION`, `ENABLE_LOSSY_BINNING`, `ENABLE_SPARSE` 조합을 위 표대로 유지한다.
 3. 모든 구조에 같은 입력을 넣고 주파수별 입력 파일 해시를 확인한다.
 4. 비교 결과에는 공통 조건과 실제로 다른 RTL 매개변수를 함께 기록한다.
 5. 처리량 결과에는 입력 패턴, 이벤트 수와 실제 출력 워드 수를 함께 기록한다. 패킹 가능한 패턴의 측정값을 모든 workload의 보편적인 처리량으로 확대하지 않는다.

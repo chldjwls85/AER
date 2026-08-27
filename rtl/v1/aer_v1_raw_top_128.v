@@ -1,9 +1,9 @@
 `timescale 1ns/1ps
 
-// Fair no-binning baseline for aer_v1_top_128.
-// The hierarchy, buffering, arbitration, timestamp contract, packet width,
-// and output handshake are shared with the adaptive mode. Only the tile
-// encoder is forced to lossless RAW8 for every non-empty 2x2 snapshot.
+// Fair RAW baseline for the region-shared CARE architecture.
+// Capture banks, two-entry regional snapshot FIFOs, arbitration, pipeline
+// latency, packet width, and output handshake are identical.  Only the packet
+// engine is restricted to lossless RAW8.
 module aer_v1_raw_top_128 #(
     parameter integer EXTERNAL_RX_TIMESTAMP = 0
 ) (
@@ -19,9 +19,11 @@ module aer_v1_raw_top_128 #(
     output wire           out_last
 );
 
-    aer_v1_top_128 #(
-        .ENABLE_BINNING(0),
-        .EXTERNAL_RX_TIMESTAMP(EXTERNAL_RX_TIMESTAMP)
+    wire unused_external_timestamp;
+    assign unused_external_timestamp = EXTERNAL_RX_TIMESTAMP;
+
+    aer_v1_shared_top_128 #(
+        .ENABLE_COMPRESSION(0)
     ) shared_core_i (
         .clk           (clk),
         .rst_n         (rst_n),

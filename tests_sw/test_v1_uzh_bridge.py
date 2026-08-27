@@ -65,6 +65,33 @@ class DenseWindowTests(unittest.TestCase):
 
 
 class PacketDecoderTests(unittest.TestCase):
+    def test_external_timestamp_sparse_packet_round_trip(self) -> None:
+        bank_id = 5
+        local_tile = 3
+        pixel = 2
+        tile = bank_id * 16 + local_tile
+        accepted = [{
+            "group_id": 9,
+            "source_cycle": 2,
+            "accept_cycle": 3,
+            "tile": tile,
+            "on": 1 << pixel,
+            "off": 0,
+            "source_events": 1,
+        }]
+        word = (bank_id << 7) | (local_tile << 3) | (pixel << 1) | 1
+        decoded, errors, headers = decode_words(
+            accepted,
+            [(10, word, 1)],
+            external_rx_timestamp=True,
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(headers, 1)
+        self.assertEqual(decoded[0]["format"], "SPARSE")
+        self.assertEqual(decoded[0]["on"], 1 << pixel)
+        self.assertEqual(decoded[0]["off"], 0)
+        self.assertEqual(decoded[0]["rx_timestamp_cycle"], 10)
+
     def test_external_timestamp_bank_packets_round_trip(self) -> None:
         accepted = []
         for tile in range(16):

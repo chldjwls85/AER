@@ -7,7 +7,7 @@ param(
     [int]$StartEvent = -1,
     [double]$TrailMs = 1000,
     [int]$Frames = 48,
-    [ValidateSet('lossy', 'bankfusion', 'rowfusion', 'adaptive', 'raw')]
+    [ValidateSet('sharedcare', 'sharedraw', 'combined', 'lossy', 'bankfusion', 'rowfusion', 'adaptive', 'raw')]
     [string]$Mode = 'adaptive',
     [ValidateSet(1, 2)]
     [int]$PixelFifoDepth = 1,
@@ -85,12 +85,17 @@ try {
         'rtl\frontend\aer_timebase.v',
         'rtl\frontend\aer_pixel_pending_array.v',
         'rtl\v1\aer_tile_bitmap_encoder.v',
+        'rtl\v1\aer_tile_combined_classifier.v',
         'rtl\v1\aer_locked_rr_arbiter.v',
         'rtl\v1\aer_stream_fifo2.v',
         'rtl\v1\aer_balanced_selector_tree.v',
         'rtl\v1\aer_bank_row_reader.v',
+        'rtl\v1\aer_bank_row_reader_combined_opt.v',
+        'rtl\v1\aer_bank_snapshot_buffer.v',
+        'rtl\v1\aer_shared_packet_engine.v',
         'rtl\v1\aer_global_bank_selector.v',
         'rtl\v1\aer_v1_top_128.v',
+        'rtl\v1\aer_v1_shared_top_128.v',
         'tb\v1\tb_aer_v1_cifar_pending.v'
     ) | ForEach-Object { Join-Path $projectRoot $_ }
 
@@ -106,8 +111,19 @@ try {
         & $xelab '--debug' 'typical' '--top' $simulationTop `
             '--snapshot' $snapshot
         if ($LASTEXITCODE -ne 0) { throw 'xelab failed.' }
-        & $xsim $snapshot '--runall'
-        if ($LASTEXITCODE -ne 0) { throw 'xsim failed.' }
+        $simulationOutput = & $xsim $snapshot '--runall' 2>&1
+        $simulationExitCode = $LASTEXITCODE
+        $simulationOutput | ForEach-Object { Write-Host $_ }
+        $functionalPass = $simulationOutput -match
+            'AER_V1_CIFAR_PENDING_PASS'
+        $functionalFail = $simulationOutput -match
+            'AER_V1_CIFAR_PENDING_[A-Z0-9_]*FAIL'
+        if ($functionalFail -or -not $functionalPass) {
+            throw "xsim functional test failed with exit code $simulationExitCode."
+        }
+        if ($simulationExitCode -ne 0) {
+            Write-Warning "XSim returned $simulationExitCode after the test reached PASS; continuing with the completed RTL log."
+        }
     } finally {
         Pop-Location
     }

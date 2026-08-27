@@ -7,6 +7,7 @@ module aer_bank_row_reader #(
     parameter integer ENABLE_ROW_FUSION = 0,
     parameter integer ENABLE_BANK_FUSION = 0,
     parameter integer ENABLE_LOSSY_BINNING = 0,
+    parameter integer ENABLE_SPARSE = 0,
     parameter integer EXTERNAL_RX_TIMESTAMP = 0
 ) (
     input  wire          clk,
@@ -23,14 +24,15 @@ module aer_bank_row_reader #(
     output wire [15:0]   pending_debug
 );
 
-    localparam [2:0] STATE_IDLE        = 3'd0;
-    localparam [2:0] STATE_HEADER_HOLD = 3'd1;
-    localparam [2:0] STATE_BANK_EXT    = 3'd2;
-    localparam [2:0] STATE_TIME        = 3'd3;
-    localparam [2:0] STATE_DATA        = 3'd4;
-    localparam [2:0] STATE_BANK_MASK   = 3'd5;
-    localparam [2:0] STATE_BANK_DATA   = 3'd6;
-    localparam [2:0] STATE_BANK_BINMASK = 3'd7;
+    localparam [3:0] STATE_IDLE         = 4'd0;
+    localparam [3:0] STATE_HEADER_HOLD  = 4'd1;
+    localparam [3:0] STATE_BANK_EXT     = 4'd2;
+    localparam [3:0] STATE_TIME         = 4'd3;
+    localparam [3:0] STATE_DATA         = 4'd4;
+    localparam [3:0] STATE_BANK_MASK    = 4'd5;
+    localparam [3:0] STATE_BANK_DATA    = 4'd6;
+    localparam [3:0] STATE_BANK_BINMASK = 4'd7;
+    localparam [3:0] STATE_SPARSE_TIME  = 4'd8;
 
     localparam [1:0] FORMAT_RAW8   = 2'b00;
     localparam [1:0] FORMAT_GROUP3 = 2'b01;
@@ -41,6 +43,8 @@ module aer_bank_row_reader #(
     wire [31:0]  encoded_format_flat;
     wire [127:0] encoded_payload_flat;
     wire [31:0]  encoded_flags_flat;
+    wire [15:0]  encoded_sparse_flat;
+    wire [47:0]  encoded_sparse_payload_flat;
 
     reg [15:0]  pending;
     reg [31:0]  stored_format_flat;
@@ -57,11 +61,15 @@ module aer_bank_row_reader #(
     wire [1:0] row_grant_index;
     wire       row_advance;
 
-    reg [2:0]  state;
+    reg [3:0]  state;
     reg [1:0]  selected_row;
     reg [3:0]  snapshot_columns;
     reg [3:0]  remaining_columns;
     reg [15:0] snapshot_time;
+    reg        packet_sparse;
+    reg [3:0]  sparse_snapshot_tile;
+    reg [2:0]  sparse_snapshot_payload;
+    reg [15:0] sparse_snapshot_time;
 
     // Cost-gated bank packet.  A snapshot remains pending until the final
     // payload word so bank fusion does not gain hidden buffering capacity.
@@ -73,6 +81,23 @@ module aer_bank_row_reader #(
     reg [127:0] bank_payload_shift;
     reg [3:0]   bank_payload_words_remaining;
 
+    // Lossy bank payloads are packed four tile positions at a time.  This
+    // bounded reservoir replaces the previous 16-tile variable barrel packer.
+    reg [47:0]  bank_pack_buffer;
+    reg [5:0]   bank_pack_bit_count;
+    reg [2:0]   bank_pack_group;
+    reg         bank_pack_scan_done;
+    reg [31:0]  bank_pack_chunk_data;
+    reg [5:0]   bank_pack_chunk_bits;
+    reg [47:0]  bank_pack_buffer_next;
+    reg [5:0]   bank_pack_bit_count_next;
+    reg [2:0]   bank_pack_group_next;
+    reg         bank_pack_scan_done_next;
+    reg [47:0]  bank_pack_base_buffer;
+    reg [5:0]   bank_pack_base_count;
+    reg         bank_pack_output_fire;
+    reg         bank_pack_append;
+
     reg [15:0]  bank_candidate_mask;
     reg [31:0]  bank_candidate_format_flat;
     reg [127:0] bank_candidate_payload_flat;
@@ -81,8 +106,6 @@ module aer_bank_row_reader #(
     reg [1:0]   bank_candidate_mode;
     reg [3:0]   bank_candidate_count_minus_one;
     reg [127:0] bank_candidate_payload;
-    reg [127:0] bank_candidate_raw_payload;
-    reg [127:0] bank_candidate_lossy_payload;
     reg [15:0]  bank_candidate_bin_mask;
     reg [3:0]   bank_candidate_payload_words;
     reg         bank_candidate_use;
@@ -100,9 +123,23 @@ module aer_bank_row_reader #(
     integer     bank_pack_bit_index;
     integer     bank_raw_pack_bit_index;
     integer     bank_lossy_pack_bit_index;
+    integer     bank_row_sparse_count;
+    integer     bank_row_nonsparse_count;
+    integer     bank_row_hybrid_cost;
     integer     bank_tile_index;
     integer     bank_row_index;
     integer     bank_column_index;
+    integer     bank_pack_lane;
+    integer     bank_pack_tile;
+    integer     bank_pack_chunk_index;
+
+    reg         sparse_candidate_use;
+    reg [3:0]   sparse_candidate_tile;
+    reg [2:0]   sparse_candidate_payload;
+    reg [15:0]  sparse_candidate_time;
+    reg         sparse_candidate_found;
+    integer     sparse_candidate_column;
+    integer     sparse_candidate_index;
 
     reg [1:0] selected_column;
     reg       selected_column_valid;
@@ -121,6 +158,29 @@ module aer_bank_row_reader #(
     integer   paired_tile_index;
     integer   fusion_column_index;
     integer   fusion_tile_index;
+
+    // A lossless SPARSE token is reconstructed from the already-stored RAW8
+    // bitmap instead of keeping a second per-tile coordinate register.
+    function [2:0] sparse_payload_from_raw8;
+        input [7:0] raw8;
+        begin
+            case (raw8[7:4])
+                4'b0001: sparse_payload_from_raw8 = {2'd0, 1'b1};
+                4'b0010: sparse_payload_from_raw8 = {2'd1, 1'b1};
+                4'b0100: sparse_payload_from_raw8 = {2'd2, 1'b1};
+                4'b1000: sparse_payload_from_raw8 = {2'd3, 1'b1};
+                default: begin
+                    case (raw8[3:0])
+                        4'b0001: sparse_payload_from_raw8 = {2'd0, 1'b0};
+                        4'b0010: sparse_payload_from_raw8 = {2'd1, 1'b0};
+                        4'b0100: sparse_payload_from_raw8 = {2'd2, 1'b0};
+                        4'b1000: sparse_payload_from_raw8 = {2'd3, 1'b0};
+                        default: sparse_payload_from_raw8 = 3'b000;
+                    endcase
+                end
+            endcase
+        end
+    endfunction
 
     reg [15:0] accept_mask;
     reg [15:0] clear_mask;
@@ -141,7 +201,9 @@ module aer_bank_row_reader #(
                 .has_event  (encoded_has_event[tile_gen]),
                 .format     (encoded_format_flat[tile_gen*2 +: 2]),
                 .payload    (encoded_payload_flat[tile_gen*8 +: 8]),
-                .flags      (encoded_flags_flat[tile_gen*2 +: 2])
+                .flags      (encoded_flags_flat[tile_gen*2 +: 2]),
+                .is_sparse  (encoded_sparse_flat[tile_gen]),
+                .sparse_payload(encoded_sparse_payload_flat[tile_gen*3 +: 3])
             );
         end
     endgenerate
@@ -216,8 +278,13 @@ module aer_bank_row_reader #(
                     tile_on_flat[bank_tile_index*4 +: 4],
                     tile_off_flat[bank_tile_index*4 +: 4]
                 };
-                bank_candidate_flags_flat[bank_tile_index*2 +: 2] =
-                    encoded_flags_flat[bank_tile_index*2 +: 2];
+                // flags[0] is an internal SPARSE marker while a tile waits in
+                // this bank.  It is masked back to zero on legacy DATA words.
+                bank_candidate_flags_flat[bank_tile_index*2 +: 2] = {
+                    encoded_flags_flat[bank_tile_index*2 + 1],
+                    (ENABLE_SPARSE != 0) &&
+                    encoded_sparse_flat[bank_tile_index]
+                };
             end
             if (bank_candidate_mask[bank_tile_index]) begin
                 bank_candidate_count = bank_candidate_count + 1;
@@ -230,7 +297,7 @@ module aer_bank_row_reader #(
                 if (bank_candidate_format_flat[bank_tile_index*2 +: 2] !=
                     FORMAT_BIN4)
                     bank_all_bin4 = 1'b0;
-                if (bank_candidate_flags_flat[bank_tile_index*2 +: 2] != 2'b0)
+                if (bank_candidate_flags_flat[bank_tile_index*2 + 1])
                     bank_all_flags_clear = 1'b0;
             end
         end
@@ -242,53 +309,43 @@ module aer_bank_row_reader #(
             bank_candidate_mode = FORMAT_BIN4;
 
         bank_candidate_payload = 128'b0;
-        bank_candidate_raw_payload = 128'b0;
-        bank_candidate_lossy_payload = 128'b0;
         bank_candidate_bin_mask = 16'b0;
         bank_pack_bit_index = 0;
-        bank_raw_pack_bit_index = 0;
         bank_lossy_pack_bit_index = 0;
         for (bank_tile_index = 0; bank_tile_index < 16;
              bank_tile_index = bank_tile_index + 1) begin
             if (bank_candidate_mask[bank_tile_index]) begin
-                bank_candidate_raw_payload[bank_raw_pack_bit_index +: 8] =
-                    bank_candidate_raw_flat[bank_tile_index*8 +: 8];
-                bank_raw_pack_bit_index = bank_raw_pack_bit_index + 8;
-
                 if ((bank_candidate_format_flat[bank_tile_index*2 +: 2] ==
                      FORMAT_GROUP3) ||
                     (bank_candidate_format_flat[bank_tile_index*2 +: 2] ==
                      FORMAT_BIN4)) begin
                     bank_candidate_bin_mask[bank_tile_index] = 1'b1;
-                    bank_candidate_lossy_payload[bank_lossy_pack_bit_index] =
-                        bank_candidate_payload_flat[bank_tile_index*8 + 7];
                     bank_lossy_pack_bit_index = bank_lossy_pack_bit_index + 1;
                 end else begin
-                    bank_candidate_lossy_payload[
-                        bank_lossy_pack_bit_index +: 8] =
-                        bank_candidate_raw_flat[bank_tile_index*8 +: 8];
                     bank_lossy_pack_bit_index = bank_lossy_pack_bit_index + 8;
                 end
 
-                case (bank_candidate_mode)
-                    FORMAT_RAW8: begin
-                        bank_candidate_payload[bank_pack_bit_index +: 8] =
-                            bank_candidate_payload_flat[bank_tile_index*8 +: 8];
-                        bank_pack_bit_index = bank_pack_bit_index + 8;
-                    end
-                    FORMAT_GROUP3: begin
-                        bank_candidate_payload[bank_pack_bit_index +: 3] = {
-                            bank_candidate_payload_flat[bank_tile_index*8 + 7],
-                            bank_candidate_payload_flat[bank_tile_index*8 + 6 -: 2]
-                        };
-                        bank_pack_bit_index = bank_pack_bit_index + 3;
-                    end
-                    default: begin
-                        bank_candidate_payload[bank_pack_bit_index] =
-                            bank_candidate_payload_flat[bank_tile_index*8 + 7];
-                        bank_pack_bit_index = bank_pack_bit_index + 1;
-                    end
-                endcase
+                if (ENABLE_LOSSY_BINNING == 0) begin
+                    case (bank_candidate_mode)
+                        FORMAT_RAW8: begin
+                            bank_candidate_payload[bank_pack_bit_index +: 8] =
+                                bank_candidate_payload_flat[bank_tile_index*8 +: 8];
+                            bank_pack_bit_index = bank_pack_bit_index + 8;
+                        end
+                        FORMAT_GROUP3: begin
+                            bank_candidate_payload[bank_pack_bit_index +: 3] = {
+                                bank_candidate_payload_flat[bank_tile_index*8 + 7],
+                                bank_candidate_payload_flat[bank_tile_index*8 + 6 -: 2]
+                            };
+                            bank_pack_bit_index = bank_pack_bit_index + 3;
+                        end
+                        default: begin
+                            bank_candidate_payload[bank_pack_bit_index] =
+                                bank_candidate_payload_flat[bank_tile_index*8 + 7];
+                            bank_pack_bit_index = bank_pack_bit_index + 1;
+                        end
+                    endcase
+                end
             end
         end
 
@@ -309,24 +366,53 @@ module aer_bank_row_reader #(
         for (bank_row_index = 0; bank_row_index < 4;
              bank_row_index = bank_row_index + 1) begin
             bank_row_tile_count = 0;
+            bank_row_sparse_count = 0;
             for (bank_column_index = 0; bank_column_index < 4;
                  bank_column_index = bank_column_index + 1) begin
-                if (bank_candidate_mask[bank_row_index*4 + bank_column_index])
+                if (bank_candidate_mask[bank_row_index*4 + bank_column_index]) begin
                     bank_row_tile_count = bank_row_tile_count + 1;
+                    if ((ENABLE_SPARSE != 0) &&
+                        bank_candidate_flags_flat[
+                            (bank_row_index*4 + bank_column_index)*2])
+                        bank_row_sparse_count = bank_row_sparse_count + 1;
+                end
             end
             if (bank_row_tile_count != 0) begin
                 // One row header plus the existing data-path word count.
-                bank_row_cost = bank_row_cost + 1;
-                if (ENABLE_LOSSY_BINNING != 0)
-                    bank_row_cost = bank_row_cost + bank_row_tile_count;
-                else if ((ENABLE_ROW_FUSION != 0) &&
+                if (EXTERNAL_RX_TIMESTAMP != 0)
+                    bank_packet_cost = 1 + bank_row_tile_count;
+                else
+                    bank_packet_cost = 2 + bank_row_tile_count;
+
+                bank_row_nonsparse_count =
+                    bank_row_tile_count - bank_row_sparse_count;
+                if (EXTERNAL_RX_TIMESTAMP != 0) begin
+                    bank_row_hybrid_cost = bank_row_sparse_count;
+                    if (bank_row_nonsparse_count != 0)
+                        bank_row_hybrid_cost = bank_row_hybrid_cost + 1 +
+                                               bank_row_nonsparse_count;
+                end else begin
+                    bank_row_hybrid_cost = bank_row_sparse_count * 2;
+                    if (bank_row_nonsparse_count != 0)
+                        bank_row_hybrid_cost = bank_row_hybrid_cost + 2 +
+                                               bank_row_nonsparse_count;
+                end
+
+                if ((ENABLE_SPARSE != 0) &&
+                    (bank_row_hybrid_cost <= bank_packet_cost)) begin
+                    bank_row_cost = bank_row_cost + bank_row_hybrid_cost;
+                end else if (ENABLE_LOSSY_BINNING != 0) begin
+                    bank_row_cost = bank_row_cost + bank_packet_cost;
+                end else if ((ENABLE_ROW_FUSION != 0) &&
                     (bank_all_group3 || bank_all_bin4))
-                    bank_row_cost = bank_row_cost + 1;
+                    bank_row_cost = bank_row_cost +
+                        ((EXTERNAL_RX_TIMESTAMP != 0) ? 2 : 3);
                 else if (bank_all_bin4)
                     bank_row_cost = bank_row_cost +
+                        ((EXTERNAL_RX_TIMESTAMP != 0) ? 1 : 2) +
                         ((bank_row_tile_count + 1) / 2);
                 else
-                    bank_row_cost = bank_row_cost + bank_row_tile_count;
+                    bank_row_cost = bank_row_cost + bank_packet_cost;
             end
         end
 
@@ -350,14 +436,12 @@ module aer_bank_row_reader #(
                     (bank_lossy_packet_cost < bank_raw_packet_cost) &&
                     (bank_lossy_packet_cost < bank_row_cost)) begin
                     bank_candidate_mode = FORMAT_ROW;
-                    bank_candidate_payload = bank_candidate_lossy_payload;
                     bank_candidate_payload_words =
                         bank_lossy_payload_words[3:0];
                     bank_candidate_use = 1'b1;
                 end else if ((bank_candidate_count > 1) &&
                              (bank_raw_packet_cost < bank_row_cost)) begin
                     bank_candidate_mode = FORMAT_RAW8;
-                    bank_candidate_payload = bank_candidate_raw_payload;
                     bank_candidate_payload_words =
                         (bank_candidate_count + 1) / 2;
                     bank_candidate_bin_mask = 16'b0;
@@ -369,6 +453,109 @@ module aer_bank_row_reader #(
                     bank_all_flags_clear &&
                     (bank_packet_cost < bank_row_cost);
             end
+        end
+
+        // SPARSE is a standalone lossless packet.  It is selected only when
+        // bank fusion is not cheaper, and it serves the first sparse tile in
+        // the granted row without changing row arbitration.
+        sparse_candidate_use = 1'b0;
+        sparse_candidate_tile = 4'b0;
+        sparse_candidate_payload = 3'b0;
+        sparse_candidate_time = time_now;
+        sparse_candidate_found = 1'b0;
+        sparse_candidate_column = 0;
+        sparse_candidate_index = 0;
+        for (sparse_candidate_column = 0; sparse_candidate_column < 4;
+             sparse_candidate_column = sparse_candidate_column + 1) begin
+            sparse_candidate_index =
+                                     (row_grant_valid ? row_grant_index : 0) * 4 +
+                                     sparse_candidate_column;
+            if (!sparse_candidate_found && row_grant_valid &&
+                bank_candidate_mask[sparse_candidate_index] &&
+                bank_candidate_flags_flat[sparse_candidate_index*2]) begin
+                sparse_candidate_found = 1'b1;
+                sparse_candidate_tile = sparse_candidate_index[3:0];
+                sparse_candidate_payload = sparse_payload_from_raw8(
+                    bank_candidate_raw_flat[sparse_candidate_index*8 +: 8]);
+                if (accept_mask[sparse_candidate_index])
+                    sparse_candidate_time = time_now;
+                else
+                    sparse_candidate_time =
+                        row_base_time_flat[(sparse_candidate_index/4)*16 +: 16] +
+                        stored_delta_flat[sparse_candidate_index*4 +: 4];
+            end
+        end
+        sparse_candidate_use = (ENABLE_SPARSE != 0) &&
+                               (EXTENDED_BANK_ID == 0) &&
+                               sparse_candidate_found &&
+                               !bank_candidate_use;
+    end
+
+    // Four-tile bounded pack step for the lossy bank path.  BIN candidates
+    // contribute one polarity bit and all other tiles contribute RAW8.  The
+    // loop never spans more than four fixed tile positions.
+    always @* begin
+        bank_pack_chunk_data = 32'b0;
+        bank_pack_chunk_bits = 6'b0;
+        bank_pack_chunk_index = 0;
+        bank_pack_tile = 0;
+
+        for (bank_pack_lane = 0; bank_pack_lane < 4;
+             bank_pack_lane = bank_pack_lane + 1) begin
+            bank_pack_tile = bank_pack_group * 4 + bank_pack_lane;
+            if ((bank_pack_group < 4) &&
+                bank_snapshot_mask[bank_pack_tile]) begin
+                if ((bank_snapshot_mode == FORMAT_ROW) &&
+                    bank_snapshot_bin_mask[bank_pack_tile]) begin
+                    bank_pack_chunk_data[bank_pack_chunk_index] =
+                        stored_payload_flat[bank_pack_tile*8 + 7];
+                    bank_pack_chunk_index = bank_pack_chunk_index + 1;
+                end else begin
+                    bank_pack_chunk_data[bank_pack_chunk_index +: 8] =
+                        stored_raw_flat[bank_pack_tile*8 +: 8];
+                    bank_pack_chunk_index = bank_pack_chunk_index + 8;
+                end
+            end
+        end
+        bank_pack_chunk_bits = bank_pack_chunk_index[5:0];
+    end
+
+    // Payload draining and the next four-tile pack step may happen together.
+    // Packing pauses automatically under link backpressure once 16 bits are
+    // available, so the 48-bit reservoir cannot overflow.
+    always @* begin
+        bank_pack_buffer_next = bank_pack_buffer;
+        bank_pack_bit_count_next = bank_pack_bit_count;
+        bank_pack_group_next = bank_pack_group;
+        bank_pack_scan_done_next = bank_pack_scan_done;
+
+        bank_pack_output_fire = (ENABLE_LOSSY_BINNING != 0) &&
+            (state == STATE_BANK_DATA) && out_valid && out_ready;
+        bank_pack_base_buffer = bank_pack_buffer;
+        bank_pack_base_count = bank_pack_bit_count;
+        if (bank_pack_output_fire) begin
+            bank_pack_base_buffer = bank_pack_buffer >> 16;
+            if (bank_pack_bit_count > 16)
+                bank_pack_base_count = bank_pack_bit_count - 16;
+            else
+                bank_pack_base_count = 0;
+            bank_pack_buffer_next = bank_pack_base_buffer;
+            bank_pack_bit_count_next = bank_pack_base_count;
+        end
+
+        bank_pack_append = (ENABLE_LOSSY_BINNING != 0) &&
+            packet_bank_fusion && !bank_pack_scan_done &&
+            (state != STATE_IDLE) &&
+            (bank_pack_base_count <= 16) &&
+            !(bank_pack_output_fire && out_last);
+        if (bank_pack_append) begin
+            bank_pack_buffer_next = bank_pack_base_buffer |
+                ({16'b0, bank_pack_chunk_data} << bank_pack_base_count);
+            bank_pack_bit_count_next = bank_pack_base_count +
+                                       bank_pack_chunk_bits;
+            bank_pack_group_next = bank_pack_group + 1'b1;
+            if (bank_pack_group == 3)
+                bank_pack_scan_done_next = 1'b1;
         end
     end
 
@@ -471,6 +658,11 @@ module aer_bank_row_reader #(
                         out_data = {2'b10, BANK_ID[7:0],
                                     bank_candidate_mode,
                                     bank_candidate_count_minus_one};
+                    else if (sparse_candidate_use)
+                        // 0 | bank[7:0] | tile[3:0] | pixel[1:0] | polarity.
+                        out_data = {1'b0, BANK_ID[7:0],
+                                    sparse_candidate_tile,
+                                    sparse_candidate_payload};
                     else
                         out_data = {
                             2'b11,
@@ -480,16 +672,29 @@ module aer_bank_row_reader #(
                              accept_mask[row_grant_index*4 +: 4])
                         };
                     out_valid = 1'b1;
+                    if (sparse_candidate_use &&
+                        (EXTERNAL_RX_TIMESTAMP != 0))
+                        out_last = 1'b1;
                 end
             end
             STATE_HEADER_HOLD: begin
-                if (packet_bank_fusion)
+                if (packet_sparse) begin
+                    out_data = {1'b0, BANK_ID[7:0], sparse_snapshot_tile,
+                                sparse_snapshot_payload};
+                    if (EXTERNAL_RX_TIMESTAMP != 0)
+                        out_last = 1'b1;
+                end else if (packet_bank_fusion)
                     out_data = {2'b10, BANK_ID[7:0], bank_snapshot_mode,
                                 bank_snapshot_count_minus_one};
                 else
                     out_data = {2'b11, BANK_ID[7:0], selected_row,
                                 snapshot_columns};
                 out_valid = 1'b1;
+            end
+            STATE_SPARSE_TIME: begin
+                out_data = sparse_snapshot_time;
+                out_valid = 1'b1;
+                out_last = 1'b1;
             end
             STATE_BANK_EXT: begin
                 // Present only when a configured sensor needs more than eight
@@ -511,7 +716,7 @@ module aer_bank_row_reader #(
                         FORMAT_RAW8,
                         stored_delta_flat[selected_tile_index*4 +: 4],
                         stored_raw_flat[selected_tile_index*8 +: 8],
-                        stored_flags_flat[selected_tile_index*2 +: 2]
+                        {stored_flags_flat[selected_tile_index*2 + 1], 1'b0}
                     };
                 end else if (row_fusion_active && row_all_bin4) begin
                     // Data-phase-only row format.  Header column bits identify
@@ -559,7 +764,7 @@ module aer_bank_row_reader #(
                         stored_format_flat[selected_tile_index*2 +: 2],
                         stored_delta_flat[selected_tile_index*4 +: 4],
                         stored_payload_flat[selected_tile_index*8 +: 8],
-                        stored_flags_flat[selected_tile_index*2 +: 2]
+                        {stored_flags_flat[selected_tile_index*2 + 1], 1'b0}
                     };
                 end
             end
@@ -572,8 +777,16 @@ module aer_bank_row_reader #(
                 out_valid = 1'b1;
             end
             STATE_BANK_DATA: begin
-                out_data = bank_payload_shift[15:0];
-                out_valid = (bank_payload_words_remaining != 0);
+                if (ENABLE_LOSSY_BINNING != 0) begin
+                    out_data = bank_pack_buffer[15:0];
+                    out_valid = (bank_payload_words_remaining != 0) &&
+                        ((bank_pack_bit_count >= 16) ||
+                         (bank_pack_scan_done &&
+                          (bank_pack_bit_count != 0)));
+                end else begin
+                    out_data = bank_payload_shift[15:0];
+                    out_valid = (bank_payload_words_remaining != 0);
+                end
                 out_last = (bank_payload_words_remaining == 1);
             end
             default: begin
@@ -586,7 +799,15 @@ module aer_bank_row_reader #(
 
     always @* begin
         clear_mask = 16'b0;
-        if ((state == STATE_DATA) && out_valid && out_ready) begin
+        if ((state == STATE_IDLE) && sparse_candidate_use &&
+            (EXTERNAL_RX_TIMESTAMP != 0) && out_valid && out_ready) begin
+            clear_mask[sparse_candidate_tile] = 1'b1;
+        end else if ((state == STATE_HEADER_HOLD) && packet_sparse &&
+                     (EXTERNAL_RX_TIMESTAMP != 0) && out_valid && out_ready) begin
+            clear_mask[sparse_snapshot_tile] = 1'b1;
+        end else if ((state == STATE_SPARSE_TIME) && out_valid && out_ready) begin
+            clear_mask[sparse_snapshot_tile] = 1'b1;
+        end else if ((state == STATE_DATA) && out_valid && out_ready) begin
             if (row_fusion_active)
                 clear_mask[selected_row*4 +: 4] = remaining_columns;
             else
@@ -597,11 +818,14 @@ module aer_bank_row_reader #(
                      out_last) begin
             clear_mask = bank_snapshot_mask;
         end
-        pending_after = (pending & ~clear_mask) | accept_mask;
+        pending_after = (pending | accept_mask) & ~clear_mask;
     end
 
     assign row_advance = out_valid && out_ready && out_last &&
-        ((state == STATE_DATA) || (state == STATE_BANK_DATA));
+        ((state == STATE_DATA) || (state == STATE_BANK_DATA) ||
+         (state == STATE_SPARSE_TIME) ||
+         ((state == STATE_IDLE) && sparse_candidate_use) ||
+         ((state == STATE_HEADER_HOLD) && packet_sparse));
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -618,6 +842,10 @@ module aer_bank_row_reader #(
             snapshot_columns    <= 4'b0;
             remaining_columns   <= 4'b0;
             snapshot_time       <= 16'b0;
+            packet_sparse       <= 1'b0;
+            sparse_snapshot_tile <= 4'b0;
+            sparse_snapshot_payload <= 3'b0;
+            sparse_snapshot_time <= 16'b0;
             packet_bank_fusion  <= 1'b0;
             bank_snapshot_mask  <= 16'b0;
             bank_snapshot_bin_mask <= 16'b0;
@@ -625,8 +853,16 @@ module aer_bank_row_reader #(
             bank_snapshot_count_minus_one <= 4'b0;
             bank_payload_shift  <= 128'b0;
             bank_payload_words_remaining <= 4'b0;
+            bank_pack_buffer    <= 48'b0;
+            bank_pack_bit_count <= 6'b0;
+            bank_pack_group     <= 3'b0;
+            bank_pack_scan_done <= 1'b0;
         end else begin
             pending <= pending_after;
+            bank_pack_buffer <= bank_pack_buffer_next;
+            bank_pack_bit_count <= bank_pack_bit_count_next;
+            bank_pack_group <= bank_pack_group_next;
+            bank_pack_scan_done <= bank_pack_scan_done_next;
 
             for (capture_tile_index = 0; capture_tile_index < 16;
                  capture_tile_index = capture_tile_index + 1) begin
@@ -639,8 +875,11 @@ module aer_bank_row_reader #(
                         tile_on_flat[capture_tile_index*4 +: 4],
                         tile_off_flat[capture_tile_index*4 +: 4]
                     };
-                    stored_flags_flat[capture_tile_index*2 +: 2] <=
-                        encoded_flags_flat[capture_tile_index*2 +: 2];
+                    stored_flags_flat[capture_tile_index*2 +: 2] <= {
+                        encoded_flags_flat[capture_tile_index*2 + 1],
+                        (ENABLE_SPARSE != 0) &&
+                        encoded_sparse_flat[capture_tile_index]
+                    };
 
                     if (EXTERNAL_RX_TIMESTAMP != 0)
                         stored_delta_flat[capture_tile_index*4 +: 4] <= 4'd0;
@@ -676,19 +915,42 @@ module aer_bank_row_reader #(
                             accept_mask[row_grant_index*4 +: 4];
                         snapshot_time <=
                             row_base_time_flat[row_grant_index*16 +: 16];
-                        packet_bank_fusion <= bank_candidate_use;
-                        bank_snapshot_mask <= bank_candidate_mask;
-                        bank_snapshot_bin_mask <= bank_candidate_bin_mask;
-                        bank_snapshot_mode <= bank_candidate_mode;
-                        bank_snapshot_count_minus_one <=
-                            bank_candidate_count_minus_one;
-                        bank_payload_shift <= bank_candidate_payload;
-                        bank_payload_words_remaining <=
-                            bank_candidate_payload_words;
+                        if (ENABLE_SPARSE != 0) begin
+                            packet_sparse <= sparse_candidate_use;
+                            sparse_snapshot_tile <= sparse_candidate_tile;
+                            sparse_snapshot_payload <= sparse_candidate_payload;
+                            sparse_snapshot_time <= sparse_candidate_time;
+                        end else begin
+                            packet_sparse <= 1'b0;
+                        end
+
+                        if (ENABLE_BANK_FUSION != 0) begin
+                            packet_bank_fusion <= bank_candidate_use;
+                            bank_snapshot_mask <= bank_candidate_mask;
+                            bank_snapshot_bin_mask <= bank_candidate_bin_mask;
+                            bank_snapshot_mode <= bank_candidate_mode;
+                            bank_snapshot_count_minus_one <=
+                                bank_candidate_count_minus_one;
+                            bank_payload_shift <= bank_candidate_payload;
+                            bank_payload_words_remaining <=
+                                bank_candidate_payload_words;
+                            bank_pack_buffer <= 48'b0;
+                            bank_pack_bit_count <= 6'b0;
+                            bank_pack_group <= 3'b0;
+                            bank_pack_scan_done <= 1'b0;
+                        end else begin
+                            packet_bank_fusion <= 1'b0;
+                        end
 
                         if (out_valid && out_ready) begin
                             if (bank_candidate_use)
                                 state <= STATE_BANK_MASK;
+                            else if (sparse_candidate_use) begin
+                                if (EXTERNAL_RX_TIMESTAMP != 0)
+                                    state <= STATE_IDLE;
+                                else
+                                    state <= STATE_SPARSE_TIME;
+                            end
                             else if (EXTENDED_BANK_ID != 0)
                                 state <= STATE_BANK_EXT;
                             else if (EXTERNAL_RX_TIMESTAMP != 0)
@@ -704,6 +966,12 @@ module aer_bank_row_reader #(
                     if (out_valid && out_ready) begin
                         if (packet_bank_fusion)
                             state <= STATE_BANK_MASK;
+                        else if (packet_sparse) begin
+                            if (EXTERNAL_RX_TIMESTAMP != 0)
+                                state <= STATE_IDLE;
+                            else
+                                state <= STATE_SPARSE_TIME;
+                        end
                         else if (EXTENDED_BANK_ID != 0)
                             state <= STATE_BANK_EXT;
                         else if (EXTERNAL_RX_TIMESTAMP != 0)
@@ -723,6 +991,10 @@ module aer_bank_row_reader #(
                 STATE_TIME: begin
                     if (out_valid && out_ready)
                         state <= STATE_DATA;
+                end
+                STATE_SPARSE_TIME: begin
+                    if (out_valid && out_ready)
+                        state <= STATE_IDLE;
                 end
                 STATE_DATA: begin
                     if (out_valid && out_ready) begin
@@ -750,7 +1022,8 @@ module aer_bank_row_reader #(
                             bank_payload_words_remaining <= 4'b0;
                             state <= STATE_IDLE;
                         end else begin
-                            bank_payload_shift <= bank_payload_shift >> 16;
+                            if (ENABLE_LOSSY_BINNING == 0)
+                                bank_payload_shift <= bank_payload_shift >> 16;
                             bank_payload_words_remaining <=
                                 bank_payload_words_remaining - 1'b1;
                         end

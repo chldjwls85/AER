@@ -4,7 +4,11 @@ rtl/v1/aer_tile_bitmap_encoder.v
 rtl/v1/aer_locked_rr_arbiter.v
 rtl/v1/aer_stream_fifo2.v
 rtl/v1/aer_balanced_selector_tree.v
+rtl/v1/aer_bank_snapshot_buffer.v
+rtl/v1/aer_tile_combined_classifier.v
+rtl/v1/aer_shared_packet_engine.v
 rtl/v1/aer_bank_row_reader.v
 rtl/v1/aer_global_bank_selector.v
 rtl/v1/aer_v1_top_128.v
+rtl/v1/aer_v1_shared_top_128.v
 rtl/v1/aer_v1_raw_top_128.v

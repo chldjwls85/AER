@@ -1,5 +1,9 @@
 # AER v1: 크기 가변형 균형 계층 readout
 
+> 128×128 영역 공유 압축 구조와 공정 RAW 비교의 최신 XSim 결과는
+> [AER v1 영역 공유 압축 구조와 XSim 검증](AER_v1_공유압축_최적화_XSim.md)을
+> 기준으로 한다.
+
 ## 1. 이번 RTL의 입력 가정
 
 - 기본 센서 크기: 128×128픽셀
@@ -40,7 +44,7 @@ CIFAR10-DVS 검증에는 `aer_pixel_pending_array`를 센서 앞단 모델로 �
 
 ## 3. 타일 인코딩 조건
 
-`aer_tile_bitmap_encoder`의 `ENABLE_BINNING`으로 기본 무손실 비닝과 무비닝 RAW8 기준선을 선택한다. `ENABLE_LOSSY_BINNING=1`이면 뱅크 패커가 GROUP3와 BIN4를 같은 BIN 토큰으로 취급하는 손실형 정책을 추가로 적용한다. 자세한 공통 조건은 [AER v1 공정 비교 규약](AER_v1_공정비교_규약.md)에 고정한다.
+`aer_tile_bitmap_encoder`의 `ENABLE_BINNING`으로 기본 무손실 비닝과 무비닝 RAW8 기준선을 선택한다. `ENABLE_LOSSY_BINNING=1`이면 뱅크 패커가 GROUP3와 BIN4를 같은 BIN 토큰으로 취급하는 손실형 정책을 추가로 적용한다. `ENABLE_SPARSE=1`이면 같은 분류기에서 이벤트가 정확히 하나인 타일도 찾아 손실 없는 단일 워드 SPARSE 패킷 후보로 사용한다. 자세한 공통 조건은 [AER v1 공정 비교 규약](AER_v1_공정비교_규약.md)에 고정한다.
 
 | 조건 | 형식 | 보존 정보 |
 |---|---|---|
@@ -48,6 +52,7 @@ CIFAR10-DVS 검증에는 `aer_pixel_pending_array`를 센서 앞단 모델로 �
 | 한 극성만 세 개가 1 | `GROUP3` | 극성과 이벤트가 없는 픽셀 위치 |
 | 그 밖의 조합 | `RAW8` | ON 4비트와 OFF 4비트 원본 |
 | 같은 픽셀이 ON과 OFF 동시 1 | `RAW8` | 충돌 표시와 원본 |
+| ON 또는 OFF 이벤트가 정확히 하나 | `SPARSE` 후보 | 타일·픽셀 위치와 극성 |
 
 단순 개수만 보내는 방식은 위치를 잃는다. 특히 0~4를 나타내려면 개수 하나당 3비트가 필요하므로 ON 개수 2비트와 OFF 개수 2비트만으로는 네 개를 표현할 수 없다. 기본 무손실 RTL은 `3-of-4`에서 빠진 위치까지 보존한다. 손실형 모드에서는 전송 워드가 실제로 줄어드는 경우에만 빠진 위치를 버리고 수신 측에서 네 픽셀로 복원한다.
 
@@ -167,6 +172,8 @@ RAW 타일: {ON[3:0], OFF[3:0]} 8비트
 
 한 극성의 이벤트가 세 개 또는 네 개 발생한 타일은 같은 BIN 극성 1비트로 표현한다. 세 개인 경우 수신 복원에서 가짜 이벤트가 한 개 생긴다. 회로는 `혼합 손실형`, `무손실 RAW 뱅크`, `행 RAW`의 정확한 워드 수를 비교한다. 혼합 패킷이 두 무손실 후보보다 모두 작을 때만 손실형을 선택하며, 동률이거나 이득이 없으면 무손실 RAW로 복귀한다.
 
+가변 길이 데이터는 16타일 전체를 한 클록에 패킹하지 않는다. 네 타일씩 검사해 최대 32비트를 48비트 저장소에 이어 붙이고, 준비된 16비트부터 출력한다. 이 방식은 패킹에 몇 클록이 더 걸릴 수 있지만 16타일 가변 배럴 시프터를 제거한다.
+
 선택 조건은 추정 밀도가 아니라 정확한 직렬화 비용이다.
 
 ```text
@@ -175,6 +182,20 @@ RAW 타일: {ON[3:0], OFF[3:0]} 8비트
 ```
 
 뱅크 패킷에 포함된 타일은 마지막 데이터 워드가 전송될 때 한꺼번에 해제한다. 따라서 비교군보다 추가 대기 슬롯을 얻지는 않지만, 최대 10워드 동안 한 뱅크 패킷이 링크 선택을 잠글 수 있다. 모든 타일의 기록 시각은 뱅크 헤더가 외부 링크에 도착한 클록이다.
+
+### 희소 단일 이벤트 패킷
+
+`ENABLE_SPARSE=1`, `EXTERNAL_RX_TIMESTAMP=1`일 때 2×2타일에 이벤트가 정확히 하나면 다음 16비트 한 워드로 전송할 수 있다.
+
+```text
+[15]    0 = SPARSE
+[14:7]  bank_id
+[6:3]   local_tile
+[2:1]   pixel
+[0]     polarity
+```
+
+기존 행 RAW는 이벤트 하나에도 헤더와 DATA 두 워드가 필요하지만 SPARSE는 한 워드이므로 희소 구간의 링크 점유를 절반으로 줄인다. 혼잡한 뱅크에서 손실형 융합이 더 저렴하면 SPARSE를 따로 섞지 않고 뱅크 패킷을 선택한다. SPARSE 여부는 별도 좌표 레지스터에 중복 저장하지 않고 기존 RAW8 상태와 내부 표시 비트로 관리한다.
 
 행에서 첫 타일을 받을 때 16비트 기준 시각을 한 번 저장한다. 같은 행의 다른 타일은 4비트 시간차만 저장하므로 타일마다 16비트 전체 시각을 반복하지 않는다. 시간차가 15클록을 넘은 새 타일은 기존 행 패킷을 먼저 비운 뒤 새 기준 시각으로 받는다.
 
@@ -199,19 +220,19 @@ flat_id   = bank_id × 16 + local_id
 
 ## 6. RTL 파일
 
-- `rtl/v1/aer_tile_bitmap_encoder.v`: RAW8/GROUP3/BIN4 선택
+- `rtl/v1/aer_tile_bitmap_encoder.v`: RAW8/GROUP3/BIN4와 손실 없는 SPARSE 후보를 함께 분류
 - `rtl/frontend/aer_pixel_pending_array.v`: 픽셀당 1개 대기 이벤트와 ACK 해제를 모델링하는 센서 앞단
 - `rtl/v1/aer_locked_rr_arbiter.v`: look-ahead와 패킷 잠금을 지원하는 순환 선택기
 - `rtl/v1/aer_stream_fifo2.v`: 계층 사이의 2-entry 탄력 FIFO
 - `rtl/v1/aer_balanced_selector_tree.v`: 공간 기반 가변 깊이 selector tree
-- `rtl/v1/aer_bank_row_reader.v`: BIN 쌍 패킹, 행 융합, 비용 기반 뱅크 융합과 손실형 혼합 패킷을 포함한 4×4 타일 뱅크
+- `rtl/v1/aer_bank_row_reader.v`: SPARSE, BIN 쌍 패킹, 행 융합, 비용 기반 뱅크 융합과 네 타일 단위 손실형 패커를 포함한 4×4 타일 뱅크
 - `rtl/v1/aer_global_bank_selector.v`: 균형 selector tree 래퍼
 - `rtl/v1/aer_v1_top_128.v`: 크기 가변 `aer_v1_top`과 128×128 호환 래퍼
 - `rtl/v1/aer_v1_raw_top_128.v`: 같은 core를 사용하는 무비닝 RAW8 기준 top
 - `tb/v1/`: 단위 시험과 전체 연결 시험
 - `scripts/run_v1_xsim.ps1`: 로컬 Vivado XSim 기능 시뮬레이션
 - `scripts/run_v1_cifar10_pending_xsim.ps1`: CIFAR10-DVS 픽셀 이벤트부터 외부 수신 시각 복원·시각화까지 실행
-- `scripts/run_v1_lossy_synth.ps1`: RAW/손실형 한 뱅크의 Vivado 논리합성·타이밍 비교
+- `scripts/run_v1_lossy_synth.ps1`: RAW/손실형/SPARSE+손실형 한 뱅크의 Vivado 논리합성·타이밍 비교
 - `sw/render_v1_row_fusion_compare.py`: 행 융합·기존 비닝·RAW8의 100/200MHz 공정 비교
 - `sw/render_v1_bank_fusion_compare.py`: 뱅크 융합을 포함한 네 구조의 100/200MHz 공정 비교
 - `scripts/run_v1_xcelium.sh`: 서버 Xcelium 기능 시뮬레이션
@@ -222,7 +243,7 @@ flat_id   = bank_id × 16 + local_id
 - CIFAR 센서 앞단 모델은 픽셀당 대기 슬롯이 하나여서, readout 전에 같은 픽셀에 다시 발생한 이벤트를 잃는다.
 - 외부 수신 시각 모드는 발생 시각 대신 링크 도착 시각을 저장하므로 혼잡할수록 시각 오차가 커진다.
 - 출력은 16비트 단일 링크라 최대 처리량은 한 클록당 한 워드다.
-- 손실형 혼합 패커는 현재 한 클록의 조합 논리로 비용 계산과 가변 길이 패킹을 모두 수행한다. 기능은 검증됐지만 합성 결과 면적과 임계 경로가 커, 실제 고속 구현에는 여러 클록에 나눠 패킹하거나 파이프라인을 넣어야 한다.
+- 손실형 데이터 패킹은 네 타일씩 여러 클록에 나눴지만, 패킷 비용 계산과 SPARSE/뱅크/행 선택은 아직 같은 결정 경로에 있다. 200MHz를 목표로 하면 분류·비용 계산·패킷 선택 사이에 추가 파이프라인이 필요하다.
 - 손실형 뱅크 패킷은 8비트 `bank_id`만 지원한다. 256뱅크를 넘는 구성에서는 행 RAW 경로로 복귀한다.
 - 뱅크 패킷 잠금은 평균 지연을 줄일 수 있지만 다른 뱅크의 순간 최대 대기시간을 늘릴 수 있다.
 - selector fan-in은 제한했지만 실제 목표 주파수는 합성 및 배치·배선 후 확인해야 한다.

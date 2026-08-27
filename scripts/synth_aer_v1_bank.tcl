@@ -1,5 +1,5 @@
 if {$argc < 2} {
-    puts "usage: vivado -mode batch -source synth_aer_v1_bank.tcl -tclargs <raw|lossy> <output_dir> ?part?"
+    puts "usage: vivado -mode batch -source synth_aer_v1_bank.tcl -tclargs <raw|lossy|combined|combined_opt> <output_dir> ?part?"
     exit 2
 }
 
@@ -15,6 +15,7 @@ if {$mode eq "raw"} {
         ENABLE_ROW_FUSION=0
         ENABLE_BANK_FUSION=0
         ENABLE_LOSSY_BINNING=0
+        ENABLE_SPARSE=0
         EXTERNAL_RX_TIMESTAMP=1
     }
 } elseif {$mode eq "lossy"} {
@@ -23,8 +24,20 @@ if {$mode eq "raw"} {
         ENABLE_ROW_FUSION=0
         ENABLE_BANK_FUSION=1
         ENABLE_LOSSY_BINNING=1
+        ENABLE_SPARSE=0
         EXTERNAL_RX_TIMESTAMP=1
     }
+} elseif {$mode eq "combined"} {
+    set generic_list {
+        ENABLE_BINNING=1
+        ENABLE_ROW_FUSION=0
+        ENABLE_BANK_FUSION=1
+        ENABLE_LOSSY_BINNING=1
+        ENABLE_SPARSE=1
+        EXTERNAL_RX_TIMESTAMP=1
+    }
+} elseif {$mode eq "combined_opt"} {
+    set generic_list {}
 } else {
     puts "unsupported synthesis mode: $mode"
     exit 2
@@ -32,15 +45,25 @@ if {$mode eq "raw"} {
 
 file mkdir $output_dir
 read_verilog [file join $project_root rtl v1 aer_tile_bitmap_encoder.v]
+read_verilog [file join $project_root rtl v1 aer_tile_combined_classifier.v]
 read_verilog [file join $project_root rtl v1 aer_locked_rr_arbiter.v]
 read_verilog [file join $project_root rtl v1 aer_bank_row_reader.v]
+read_verilog [file join $project_root rtl v1 aer_bank_row_reader_combined_opt.v]
 
-synth_design \
-    -top aer_bank_row_reader \
-    -part $part \
-    -mode out_of_context \
-    -flatten_hierarchy rebuilt \
-    -generic $generic_list
+if {$mode eq "combined_opt"} {
+    synth_design \
+        -top aer_bank_row_reader_combined_opt \
+        -part $part \
+        -mode out_of_context \
+        -flatten_hierarchy rebuilt
+} else {
+    synth_design \
+        -top aer_bank_row_reader \
+        -part $part \
+        -mode out_of_context \
+        -flatten_hierarchy rebuilt \
+        -generic $generic_list
+}
 
 create_clock -name clk -period 5.000 [get_ports clk]
 set_false_path -from [get_ports rst_n]

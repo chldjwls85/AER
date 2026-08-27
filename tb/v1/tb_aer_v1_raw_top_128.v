@@ -76,15 +76,17 @@ module tb_aer_v1_raw_top_128;
             $display("AER_V1_RAW_TOP_TIMEOUT transfers=%0d", transfer_count);
             $fatal(1);
         end
-        if ((captured[0] !== 16'hC452) ||
-            (captured[2] !== 16'h03C0) ||
+        if ((captured[0] !== 16'h8440) ||
+            (captured[1] !== 16'h0020) ||
+            (captured[2] !== 16'h00F0) ||
             (captured_last !== 3'b100)) begin
             $display("AER_V1_RAW_TOP_FAIL words=%h,%h,%h last=%b",
                 captured[0], captured[1], captured[2], captured_last);
             $fatal(1);
         end
 
-        $display("AER_V1_RAW_TOP_128_PASS time_word=%h", captured[1]);
+        $display("AER_V1_RAW_TOP_128_PASS header=%h mask=%h data=%h",
+            captured[0], captured[1], captured[2]);
         $finish;
     end
 

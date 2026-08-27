@@ -1,6 +1,8 @@
 param(
     [string]$OutputRoot = 'build\synth_v1_lossy',
-    [string]$Part = 'xc7z020clg484-1'
+    [string]$Part = 'xc7z020clg484-1',
+    [ValidateSet('raw', 'lossy', 'combined', 'combined_opt')]
+    [string[]]$Modes = @('raw', 'lossy', 'combined', 'combined_opt')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,7 +43,7 @@ $mappedTclScript = Join-Path $mappedRoot 'scripts\synth_aer_v1_bank.tcl'
 
 Push-Location $mappedRoot
 try {
-    foreach ($mode in @('raw', 'lossy')) {
+    foreach ($mode in $Modes) {
         $modeRoot = Join-Path $resolvedOutputRoot $mode
         $modeArgument = Join-Path $OutputRoot $mode
         New-Item -ItemType Directory -Force -Path $modeRoot | Out-Null
@@ -57,5 +59,6 @@ try {
 }
 
 Write-Host "AER_V1_LOSSY_SYNTH_DONE root=$resolvedOutputRoot"
-Get-Content (Join-Path $resolvedOutputRoot 'raw\summary.txt')
-Get-Content (Join-Path $resolvedOutputRoot 'lossy\summary.txt')
+foreach ($mode in $Modes) {
+    Get-Content (Join-Path $resolvedOutputRoot "$mode\summary.txt")
+}

@@ -59,6 +59,38 @@ class RtlCycleModelTests(unittest.TestCase):
         self.assertEqual(result.output_words, 4)
         self.assertEqual(result.packet_mode_counts, {"BANK_LOSSY": 1})
 
+    def test_combined_policy_uses_one_word_sparse_packet(self) -> None:
+        result = simulate_rtl_cycle_exact(
+            [_event(0, 0, 0, 1)], "combined", self.config, 100_000_000
+        )
+
+        self.assertEqual(result.accepted_events, 1)
+        self.assertEqual(result.output_words, 1)
+        self.assertEqual(result.packet_mode_counts, {"SPARSE": 1})
+
+    def test_combined_policy_keeps_dense_lossy_bank_packet(self) -> None:
+        events = []
+        for tile_index, pixel_count in enumerate((3, 4, 3, 4, 3)):
+            tile_x = tile_index % 4
+            tile_y = tile_index // 4
+            for pixel in range(pixel_count):
+                events.append(
+                    _event(
+                        0,
+                        tile_x * 2 + (pixel & 1),
+                        tile_y * 2 + ((pixel >> 1) & 1),
+                        1,
+                    )
+                )
+
+        result = simulate_rtl_cycle_exact(
+            events, "combined", self.config, 100_000_000
+        )
+
+        self.assertEqual(result.output_words, 4)
+        self.assertEqual(result.false_positive_events, 3)
+        self.assertEqual(result.packet_mode_counts, {"BANK_LOSSY": 1})
+
 
 if __name__ == "__main__":
     unittest.main()

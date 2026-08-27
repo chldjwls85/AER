@@ -147,13 +147,52 @@ Invoke-XsimTest 'tb_aer_bank_lossy_mixed' @(
     'tb\v1\tb_aer_bank_lossy_mixed.v'
 )
 
+Invoke-XsimTest 'tb_aer_bank_sparse_lossy' @(
+    'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader.v',
+    'tb\v1\tb_aer_bank_sparse_lossy.v'
+)
+
+Invoke-XsimTest 'tb_aer_bank_combined_opt' @(
+    'rtl\v1\aer_tile_combined_classifier.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_bank_row_reader_combined_opt.v',
+    'tb\v1\tb_aer_bank_combined_opt.v'
+)
+
+Invoke-XsimTest 'tb_aer_shared_packet_engine' @(
+    'rtl\v1\aer_tile_combined_classifier.v',
+    'rtl\v1\aer_shared_packet_engine.v',
+    'tb\v1\tb_aer_shared_packet_engine.v'
+)
+
+Invoke-XsimTest 'tb_aer_bank_snapshot_buffer' @(
+    'rtl\v1\aer_bank_snapshot_buffer.v',
+    'tb\v1\tb_aer_bank_snapshot_buffer.v'
+)
+
+Invoke-XsimTest 'tb_aer_v1_shared_fair_pair' @(
+    'rtl\v1\aer_tile_combined_classifier.v',
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'rtl\v1\aer_stream_fifo2.v',
+    'rtl\v1\aer_balanced_selector_tree.v',
+    'rtl\v1\aer_bank_snapshot_buffer.v',
+    'rtl\v1\aer_shared_packet_engine.v',
+    'rtl\v1\aer_global_bank_selector.v',
+    'rtl\v1\aer_v1_shared_top_128.v',
+    'tb\v1\tb_aer_v1_shared_fair_pair.v'
+)
+
 Invoke-XsimTest 'tb_aer_v1_top_128' @(
     'rtl\frontend\aer_timebase.v',
     'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_tile_combined_classifier.v',
     'rtl\v1\aer_locked_rr_arbiter.v',
     'rtl\v1\aer_stream_fifo2.v',
     'rtl\v1\aer_balanced_selector_tree.v',
     'rtl\v1\aer_bank_row_reader.v',
+    'rtl\v1\aer_bank_row_reader_combined_opt.v',
     'rtl\v1\aer_global_bank_selector.v',
     'rtl\v1\aer_v1_top_128.v',
     'tb\v1\tb_aer_v1_top_128.v'
@@ -162,10 +201,12 @@ Invoke-XsimTest 'tb_aer_v1_top_128' @(
 Invoke-XsimTest 'tb_aer_v1_top_param' @(
     'rtl\frontend\aer_timebase.v',
     'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_tile_combined_classifier.v',
     'rtl\v1\aer_locked_rr_arbiter.v',
     'rtl\v1\aer_stream_fifo2.v',
     'rtl\v1\aer_balanced_selector_tree.v',
     'rtl\v1\aer_bank_row_reader.v',
+    'rtl\v1\aer_bank_row_reader_combined_opt.v',
     'rtl\v1\aer_global_bank_selector.v',
     'rtl\v1\aer_v1_top_128.v',
     'tb\v1\tb_aer_v1_top_param.v'
@@ -174,12 +215,17 @@ Invoke-XsimTest 'tb_aer_v1_top_param' @(
 Invoke-XsimTest 'tb_aer_v1_raw_top_128' @(
     'rtl\frontend\aer_timebase.v',
     'rtl\v1\aer_tile_bitmap_encoder.v',
+    'rtl\v1\aer_tile_combined_classifier.v',
     'rtl\v1\aer_locked_rr_arbiter.v',
     'rtl\v1\aer_stream_fifo2.v',
     'rtl\v1\aer_balanced_selector_tree.v',
     'rtl\v1\aer_bank_row_reader.v',
+    'rtl\v1\aer_bank_row_reader_combined_opt.v',
+    'rtl\v1\aer_bank_snapshot_buffer.v',
+    'rtl\v1\aer_shared_packet_engine.v',
     'rtl\v1\aer_global_bank_selector.v',
     'rtl\v1\aer_v1_top_128.v',
+    'rtl\v1\aer_v1_shared_top_128.v',
     'rtl\v1\aer_v1_raw_top_128.v',
     'tb\v1\tb_aer_v1_raw_top_128.v'
 )
