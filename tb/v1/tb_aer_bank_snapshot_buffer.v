@@ -53,18 +53,28 @@ module tb_aer_bank_snapshot_buffer;
             $fatal(1);
         end
 
-        // Consume A while replacing the same tile with B on the same edge.
+        // Consume A.  Registered backpressure deliberately prevents B from
+        // replacing the same tile on this edge.
         snapshot_ready = 1'b1;
         tile_in_valid[0] = 1'b1;
         tile_off_flat[3:0] = 4'b0100;
         #1;
-        if (!tile_in_ready[0] || snapshot_raw_flat[7:0] != 8'h10) begin
-            $display("AER_BANK_SNAPSHOT_REPLACE_READY_FAIL");
+        if (tile_in_ready[0] || snapshot_raw_flat[7:0] != 8'h10) begin
+            $display("AER_BANK_SNAPSHOT_REGISTERED_READY_FAIL");
             $fatal(1);
         end
         @(posedge clk);
         @(negedge clk);
         snapshot_ready = 1'b0;
+        if (!tile_in_ready[0] || snapshot_valid) begin
+            $display("AER_BANK_SNAPSHOT_RELEASE_FAIL ready=%b valid=%b",
+                tile_in_ready[0], snapshot_valid);
+            $fatal(1);
+        end
+
+        // B is still asserted and is accepted one cycle after A was drained.
+        @(posedge clk);
+        @(negedge clk);
         tile_in_valid = 16'b0;
         tile_off_flat = 64'b0;
         if (!snapshot_valid || snapshot_mask != 16'h0001 ||
@@ -84,7 +94,7 @@ module tb_aer_bank_snapshot_buffer;
             $fatal(1);
         end
 
-        $display("AER_BANK_SNAPSHOT_BUFFER_PASS same_cycle_replace=1");
+        $display("AER_BANK_SNAPSHOT_BUFFER_PASS registered_ready=1");
         $finish;
     end
 endmodule

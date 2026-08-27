@@ -40,7 +40,7 @@ CIFAR10-DVS 검증에는 `aer_pixel_pending_array`를 센서 앞단 모델로 �
 
 `aer_v1_top`의 `SENSOR_ROWS`, `SENSOR_COLS`가 타일과 뱅크 배열 수를 정한다. 두 값은 현재 고정 leaf 크기인 8×8픽셀 뱅크의 배수여야 한다. `REGION_BANK_ROWS`, `REGION_BANK_COLS`는 selector 하나가 담당하는 공간적으로 인접한 하위 블록 수다. 기본값 4×4에서는 각 request encoder와 data MUX의 fan-in이 최대 16으로 제한된다.
 
-각 축의 상위 노드 수는 `ceil(하위 노드 수 / REGION_BANK_SIZE)`로 계산한다. 한 노드만 남을 때까지만 단계를 생성하므로 작은 센서에는 불필요한 단계가 생기지 않고, 큰 센서는 배열 fan-in을 키우는 대신 등록된 상위 단계를 추가한다. 기본 128×128 구성은 `16×16 bank → 4×4 region → 1 root`의 2단 selector다. 각 selector는 패킷의 마지막 워드까지 선택을 고정하며, look-ahead grant로 다음 패킷 선택에 빈 클록을 넣지 않는다.
+각 축의 상위 노드 수는 `ceil(하위 노드 수 / REGION_BANK_SIZE)`로 계산한다. 한 노드만 남을 때까지만 단계를 생성하므로 작은 센서에는 불필요한 단계가 생기지 않고, 큰 센서는 배열 fan-in을 키우는 대신 등록된 상위 단계를 추가한다. 기본 128×128 구성은 `16×16 bank → 4×4 region → 1 root`의 2단 selector다. 각 selector는 패킷의 마지막 워드까지 선택을 고정한다. 중재 결과는 레지스터에 저장한 뒤 selector에 전달하므로 서로 다른 패킷 사이에는 1클록의 선택 시간이 생기지만, 16-way 중재와 역압 경로가 한 사이클에 이어지지 않는다.
 
 ## 3. 타일 인코딩 조건
 
@@ -222,8 +222,8 @@ flat_id   = bank_id × 16 + local_id
 
 - `rtl/v1/aer_tile_bitmap_encoder.v`: RAW8/GROUP3/BIN4와 손실 없는 SPARSE 후보를 함께 분류
 - `rtl/frontend/aer_pixel_pending_array.v`: 픽셀당 1개 대기 이벤트와 ACK 해제를 모델링하는 센서 앞단
-- `rtl/v1/aer_locked_rr_arbiter.v`: look-ahead와 패킷 잠금을 지원하는 순환 선택기
-- `rtl/v1/aer_stream_fifo2.v`: 계층 사이의 2-entry 탄력 FIFO
+- `rtl/v1/aer_locked_rr_arbiter.v`: 등록된 grant와 패킷 잠금을 지원하는 순환 선택기
+- `rtl/v1/aer_stream_fifo2.v`: 계층 사이의 2-entry FIFO. Full 상태의 ready 역전파는 다음 클록에 반영한다.
 - `rtl/v1/aer_balanced_selector_tree.v`: 공간 기반 가변 깊이 selector tree
 - `rtl/v1/aer_bank_row_reader.v`: SPARSE, BIN 쌍 패킹, 행 융합, 비용 기반 뱅크 융합과 네 타일 단위 손실형 패커를 포함한 4×4 타일 뱅크
 - `rtl/v1/aer_global_bank_selector.v`: 균형 selector tree 래퍼
@@ -255,7 +255,7 @@ flat_id   = bank_id × 16 + local_id
 
 - 타일 RAW8/GROUP3/BIN4 조건과 충돌 처리
 - BIN4 두 개 패킹, 단일 BIN, GROUP3, 시간차 제한
-- 2단 공간 selector, 패킷 잠금, 패킷 경계 zero-bubble 전송
+- 2단 공간 selector, 패킷 잠금, 패킷 내부 연속 전송 및 패킷 경계 1클록 선택
 - 2-entry 출력 FIFO의 backpressure 데이터 안정성
 - 16비트 확장 뱅크 주소
 - 24×40 센서, 3×5 뱅크, 3단 selector의 비정규 배열 생성

@@ -90,6 +90,11 @@ Invoke-XsimTest 'tb_aer_tile_bitmap_encoder_fair' @(
     'tb\v1\tb_aer_tile_bitmap_encoder_fair.v'
 )
 
+Invoke-XsimTest 'tb_aer_locked_rr_arbiter' @(
+    'rtl\v1\aer_locked_rr_arbiter.v',
+    'tb\v1\tb_aer_locked_rr_arbiter.v'
+)
+
 Invoke-XsimTest 'tb_aer_global_bank_selector' @(
     'rtl\v1\aer_locked_rr_arbiter.v',
     'rtl\v1\aer_stream_fifo2.v',

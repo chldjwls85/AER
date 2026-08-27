@@ -31,8 +31,11 @@ module aer_stream_fifo2 #(
     assign out_last  = last_mem[read_pointer];
     assign pop       = out_valid && out_ready;
 
-    // Accept a replacement word in the same cycle that a full FIFO pops.
-    assign in_ready = (count != 2'd2) || pop;
+    // Do not let downstream out_ready look through a full FIFO into the
+    // upstream arbiter and capture registers.  A full FIFO becomes ready on
+    // the cycle after its pop.  This may insert one bubble only at the full
+    // boundary, while cutting the long combinational backpressure path.
+    assign in_ready = (count != 2'd2);
     assign push     = in_valid && in_ready;
 
     always @(posedge clk) begin

@@ -110,8 +110,8 @@ module tb_aer_bank_row_reader;
         tile_in_valid[1] = 1'b1;
         @(posedge clk);
 
-        // A token accepted together with the look-ahead header is included in
-        // the same snapshot.  This one is GROUP3 at t=105.
+        // A token accepted before the registered header is emitted is included
+        // in the same snapshot.  This one is GROUP3 at t=105.
         @(negedge clk);
         tile_in_valid = 16'b0;
         tile_on_flat = 64'b0;
@@ -184,8 +184,8 @@ module tb_aer_bank_row_reader;
             $fatal(1);
         end
 
-        // Queue two rows together.  Their six words must be emitted on six
-        // consecutive cycles, including the packet boundary.
+        // Queue two rows together.  Words inside each packet are consecutive;
+        // the registered grant adds one intentional cycle at the boundary.
         time_now = 16'd300;
         tile_on_flat[0*4 +: 4] = 4'b1111;
         tile_off_flat[4*4 +: 4] = 4'b1111;
@@ -206,14 +206,15 @@ module tb_aer_bank_row_reader;
         check_transfer(16, 16'h8000, 1'b1);
 
         for (index = 12; index < 17; index = index + 1) begin
-            if (captured_cycle[index] != captured_cycle[index-1] + 1) begin
-                $display("BANK_READER_BUBBLE_FAIL index=%0d cycles=%0d,%0d",
+            if (captured_cycle[index] != captured_cycle[index-1] +
+                ((index == 14) ? 2 : 1)) begin
+                $display("BANK_READER_REGISTERED_BOUNDARY_FAIL index=%0d cycles=%0d,%0d",
                     index, captured_cycle[index-1], captured_cycle[index]);
                 $fatal(1);
             end
         end
 
-        $display("AER_BANK_ROW_READER_PASS events=16 words=4 zero_bubble=1");
+        $display("AER_BANK_ROW_READER_PASS events=16 words=4 registered_boundary=1");
         $finish;
     end
 

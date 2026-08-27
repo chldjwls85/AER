@@ -138,9 +138,12 @@ module tb_aer_global_bank_selector;
         check_transfer(1, 16'hA102, 1'b1);
         check_transfer(2, 16'hA606, 1'b1);
 
+        // Words inside one packet remain consecutive.  A different packet is
+        // selected through the registered grant boundary, so one idle cycle
+        // is intentional between packet 1 and packet 2.
         if ((captured_cycle[1] != captured_cycle[0] + 1) ||
-            (captured_cycle[2] != captured_cycle[1] + 1)) begin
-            $display("GLOBAL_SELECTOR_BUBBLE_FAIL cycles=%0d,%0d,%0d",
+            (captured_cycle[2] != captured_cycle[1] + 2)) begin
+            $display("GLOBAL_SELECTOR_REGISTERED_BOUNDARY_FAIL cycles=%0d,%0d,%0d",
                 captured_cycle[0], captured_cycle[1], captured_cycle[2]);
             $fatal(1);
         end
@@ -179,7 +182,7 @@ module tb_aer_global_bank_selector;
         wait_for_transfers(4);
         check_transfer(3, 16'hA000, 1'b1);
 
-        $display("AER_GLOBAL_BANK_SELECTOR_PASS levels=2 zero_bubble=1 fifo2=1");
+        $display("AER_GLOBAL_BANK_SELECTOR_PASS levels=2 registered_boundary=1 fifo2=1");
         $finish;
     end
 

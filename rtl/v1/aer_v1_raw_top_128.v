@@ -1,9 +1,9 @@
 `timescale 1ns/1ps
 
-// Fair RAW baseline for the region-shared CARE architecture.
-// Capture banks, two-entry regional snapshot FIFOs, arbitration, pipeline
-// latency, packet width, and output handshake are identical.  Only the packet
-// engine is restricted to lossless RAW8.
+// Ablation model of the proposed region-shared architecture with compression
+// disabled.  This is not the original V1 RAW baseline: it keeps the proposed
+// snapshot, regional FIFO, and bank-packet infrastructure and is used only to
+// isolate the incremental effect of the CARE compression policy.
 module aer_v1_raw_top_128 #(
     parameter integer EXTERNAL_RX_TIMESTAMP = 0
 ) (

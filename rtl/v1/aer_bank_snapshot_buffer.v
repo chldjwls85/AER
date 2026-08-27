@@ -32,10 +32,11 @@ module aer_bank_snapshot_buffer (
     assign snapshot_raw_flat = stored_raw_flat;
     assign pending_debug = pending;
 
-    // A tile can be replaced on the same edge that the old bank snapshot is
-    // consumed.  The downstream FIFO samples the old value before the NBA
-    // updates install the replacement event.
-    assign tile_in_ready = ~pending | {16{snapshot_take}};
+    // Keep downstream snapshot_ready out of the capture-register write path.
+    // A consumed tile becomes ready on the following cycle instead of being
+    // replaced on the same edge.  This removes the selected-bank ready decode
+    // from accept_mask and stored_raw_flat control with no extra storage bits.
+    assign tile_in_ready = ~pending;
 
     always @* begin
         accept_mask = 16'b0;
