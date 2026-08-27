@@ -253,6 +253,7 @@ results/            요약 CSV, 작은 metrics/log, 대표 figure/animation
 | [BASELINE_COMPARISON.md](docs/BASELINE_COMPARISON.md) | Fair RAW/Team/Current 정량 비교 |
 | [REFERENCE_VERSIONS.md](docs/REFERENCE_VERSIONS.md) | branch, commit, dataset anchor |
 | [CADENCE_HANDOFF.md](docs/CADENCE_HANDOFF.md) | Cadence 조건과 현재 진행 상태 |
+| [AER_V3_V4_DESIGN_EVOLUTION.md](docs/AER_V3_V4_DESIGN_EVOLUTION.md) | Design Direction 2에서 V3/V4로 이어진 설계 변화와 최종 판단 |
 
 ## 비교 기준
 
