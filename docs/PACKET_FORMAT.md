@@ -1,11 +1,15 @@
 # Packet Format
 
-모든 word는 16-bit다. ROW/BANK packet은 마지막 DATA word에서, SPARSE
-packet은 TIME word에서 `out_last=1`이다.
+> 문서 범위: V3 SPARSE/ROW/BANK packet format 기준임.
+> V4는 SPARSE/ROW format을 재사용하고 BANK mode를 제거함.
+
+- 모든 output word width: 16-bit임
+- ROW/BANK 종료: 마지막 DATA word에서 `out_last=1`임
+- SPARSE 종료: TIME word에서 `out_last=1`임
 
 ## SPARSE packet
 
-정확히 하나의 ON/OFF polarity bit만 set된 accepted tile transaction에 사용한다.
+- 사용 조건: ON/OFF 전체에서 polarity bit가 정확히 1개 set된 accepted tile transaction임
 
 | Word | Bits | Width | Meaning |
 |---|---|---:|---|
@@ -16,9 +20,9 @@ packet은 TIME word에서 `out_last=1`이다.
 | ADDRESS | `[0]` | 1 | polarity, `1=ON`, `0=OFF` |
 | TIME | `[15:0]` | 16 | full timestamp; this word has `out_last=1` |
 
-ROW/BANK header는 `[15]=1`이므로 packet 시작점에서 SPARSE와 충돌하지 않는다.
-Decoder는 pixel ID의 one-hot bitmap을 polarity에 따라 ON 또는 OFF에 복원한다.
-full timestamp를 그대로 전달하므로 delta overflow나 fallback 조건은 없다.
+- Type 구분: ROW/BANK header는 `[15]=1`, SPARSE ADDRESS는 `[15]=0`이므로 충돌하지 않음
+- Decoder 동작: pixel ID를 one-hot bitmap으로 바꾸고 polarity에 따라 ON 또는 OFF에 복원함
+- Timestamp: full 16-bit 값을 직접 전달하므로 delta overflow가 없음
 
 ## ROW packet
 
@@ -34,8 +38,8 @@ full timestamp를 그대로 전달하므로 delta overflow나 fallback 조건은
 | DATA | `[6:3]` | 4 | exact OFF bitmap |
 | DATA | `[2:0]` | 3 | reserved, zero |
 
-Decoder는 column mask의 set bit를 낮은 column부터 DATA word에 대응시킨다.
-같은 row에 delta 31을 넘는 tile이 있으면 그 tile은 다음 ROW packet에 남는다.
+- DATA 대응 순서: column mask의 set bit를 낮은 column부터 DATA word에 대응함
+- Delta 초과 처리: delta가 31을 넘는 tile은 현재 packet에서 제외하고 다음 ROW packet에 남김
 
 ## BANK packet
 
@@ -52,18 +56,15 @@ Decoder는 column mask의 set bit를 낮은 column부터 DATA word에 대응시�
 | DATA | `[6:3]` | 4 | exact OFF bitmap |
 | DATA | `[2:0]` | 3 | reserved, zero |
 
-Decoder는 tile mask의 set bit를 local tile ID 0부터 오름차순으로 DATA word에
-대응시킨다. 두 row 이상 active이고 모든 delta가 31 이하이며 BANK word cost가
-최소 SPARSE/ROW 대안보다 strictly smaller일 때만 선택된다. 범위나 cost 조건을
-만족하지 않으면 lossless SPARSE/ROW fallback하므로 delta를 잘라내지 않는다.
+- DATA 대응 순서: tile mask의 set bit를 local tile ID 0부터 오름차순으로 대응함
+- BANK 선택 조건: active row 2개 이상, 모든 delta 31 이하, 대안보다 strictly smaller한 cost임
+- Fallback: 범위/cost 조건 미충족 시 lossless SPARSE/ROW를 사용함
+- 금지 사항: delta 값을 잘라내지 않음
 
 ## Lossless definition
 
-`valid && ready`로 accepted된 tile transaction의 local position, ON/OFF bitmap,
-timestamp가 packet으로 복원되어야 한다. 입력 interface 자체는 같은 pixel의
-반복 횟수가 아니라 한 capture cycle의 ON/OFF bitmap을 표현한다. 따라서 dataset
-평가에서 source event와 canonical tile transaction을 별도 집계한다.
-
-현재 candidate는 functional random 2,050건과 UZH sparse/dense/burst RTL window의
-accepted transaction 전부를 decoder로 복원했으며 missing, extra, payload mismatch,
-timestamp mismatch가 모두 0이다.
+- Lossless 기준: `valid && ready`로 accepted된 local position/ON/OFF/timestamp가 동일하게 복원돼야 함
+- 입력 의미: 같은 pixel의 반복 횟수가 아니라 한 capture cycle의 ON/OFF bitmap을 표현함
+- Dataset 집계: source event와 canonical tile transaction을 별도 집계함
+- 검증 범위: random 2,050건과 UZH sparse/dense/burst accepted transaction 전체임
+- 검증 결과: missing/extra/payload/timestamp mismatch 모두 0임

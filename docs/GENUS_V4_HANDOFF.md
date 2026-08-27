@@ -10,21 +10,19 @@
 - Clock: 10ns / 100MHz
 - Clock uncertainty: 0.2ns
 
-The repository does not contain the competition server's V3 library path,
-I/O constraints, synthesis effort/options, or verified power methodology.
-Do not guess them. Create source-safe server fragments from the existing V3
-flow and pass their paths through:
+- Repository에 없는 정보: 대회 server의 V3 library path, I/O constraint, effort/option, power methodology임
+- 원칙: 확인되지 않은 server 설정을 추측하지 않음
+- 적용 방법: 기존 V3 flow에서 검증된 server fragment를 준비하고 환경 변수로 전달함
 
 - `AER_GENUS_SERVER_SETUP_TCL`: library/PVT/search path and exact effort/options
 - `AER_GENUS_V3_IO_CONSTRAINTS_TCL`: exact V3 I/O delay/drive/load constraints
 - `AER_GENUS_V3_POWER_TCL`: optional exact V3 power methodology
 
-The example hook files intentionally stop with an error until verified server
-commands replace the placeholders.
+- Example hook: placeholder를 검증된 server command로 교체하기 전에는 의도적으로 error 종료함
 
 ## Output
 
-Each invocation writes a separate UTC-tagged directory:
+- 출력 분리: 실행마다 UTC tag가 포함된 별도 directory를 생성함
 
 ```text
 results/genus_v4/<run_tag>/
@@ -39,9 +37,9 @@ results/genus_v4/<run_tag>/
 └── genus_v4_summary.txt
 ```
 
-Stage runtime markers are `AER_STAGE_START` and `AER_STAGE_DONE`, with UTC,
-epoch, and elapsed seconds. If no verified power hook is supplied, the log and
-summary record `POWER_METHOD_REQUIRES_EXISTING_SERVER_SETUP`.
+- Stage marker: `AER_STAGE_START`, `AER_STAGE_DONE` 사용함
+- Runtime 정보: UTC, epoch, elapsed seconds 기록함
+- Power hook 미제공: `POWER_METHOD_REQUIRES_EXISTING_SERVER_SETUP`을 log/summary에 기록함
 
 ## Server execution
 
@@ -59,5 +57,4 @@ export AER_GENUS_V3_POWER_TCL=<VERIFIED_V3_POWER_TCL>  # omit only if unavailabl
 bash scripts/genus/run_genus_v4.sh
 ```
 
-For a non-Git transfer, the paths in
-`scripts/genus/v4_handoff_manifest.txt` are the complete minimal handoff set.
+- Non-Git 전달: `scripts/genus/v4_handoff_manifest.txt`의 경로만 전달하면 됨

@@ -1,4 +1,8 @@
-# Lossless SPARSE/ROW/BANK Adaptive AER Packet Readout
+# V3 Reference: Lossless SPARSE/ROW/BANK Adaptive AER Packet Readout
+
+> 문서 범위: 본 README는 V3 SPARSE/ROW/BANK frozen candidate 기준 설명임.
+> V4 Lightweight SPARSE/ROW와 최종 synthesis 판단은
+> [AER_V3_V4_DESIGN_EVOLUTION.md](docs/AER_V3_V4_DESIGN_EVOLUTION.md) 참조 필요함.
 
 128×128 polarity-event sensor용 lossless AER packet readout RTL 및 검증 환경임.
 
@@ -8,7 +12,7 @@
 - 출력: 16-bit `valid/ready/last`
 - 전역 readout: packet-locked round-robin
 - 구현 언어: synthesizable Verilog-2001
-- 현재 RTL 기준: `AER_hyeonho` / `ad8fbd05b88e4645847dc438a5f3be668998882c`
+- V3 RTL 기준: `AER_hyeonho` / `ad8fbd05b88e4645847dc438a5f3be668998882c`
 
 ## 한눈에 보는 현재 상태
 
@@ -21,7 +25,7 @@
 | Unintended loss | **0** | accepted-to-decoded 기준 |
 | RAW 대비 word 절감 | **28.45~33.24%** | 전체 7-speed sweep |
 | Cadence Xcelium 호환성 | **PASS** | SPARSE, 128×128 smoke, dense dataset |
-| Full Genus PPA | **진행 중** | 2026-08-27 KST 기준, Area/Timing 미확정 |
+| V3 Full Genus PPA | **N/A** | `syn_generic` 장시간 진행 후 수동 중단함 |
 | Innovus / P&R | **미수행** | 현재 작업 범위 아님 |
 
 > `READY FOR CADENCE EVALUATION`은 기능·traffic gate 통과 의미임.
@@ -45,7 +49,8 @@
 | Fair RAW | tile event마다 ROW header/time/data 전송 | 약 3 words/event | 비교 기준 |
 | Team second | RAW8/GROUP3/BIN4/BIN pair packing | 실제 trace에서 packing 기회가 거의 없음 | UZH 개선 미미 |
 | Previous ROW/BANK | multi-row bank locality의 metadata 공유 | Dense XSim 3.65% 개선, BANK 0.2~3%, 1000x P99 6,380 cycles | **NO-GO** |
-| Current SPARSE/ROW/BANK | 흔한 singleton transaction을 2 words로 직접 전송 | RAW 대비 28.45~33.24% 절감 | **Cadence 평가 대상** |
+| V3 SPARSE/ROW/BANK | 흔한 singleton transaction을 2 words로 직접 전송 | RAW 대비 28.45~33.24% 절감 | **Functional/traffic PASS, synthesis NO-GO** |
+| V4 Lightweight SPARSE/ROW | BANK와 bank-wide 분석 제거 | 별도 full UZH 결과 없음 | **DC synthesis 완료, timing 개선 필요** |
 
 ### SPARSE가 필요한 이유
 
@@ -82,7 +87,7 @@
 | `aer_global_readout` | regional mux와 root mux 구성 |
 | `aer_top_128` | 128×128 / 4096-tile top wrapper |
 
-상세 계층 및 signal flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 상세 계층 및 signal flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참조함
 
 ## Packet mode
 
@@ -92,17 +97,17 @@
 | ROW | 한 row의 singleton/non-singleton 혼합 | `HEADER + TIME + DATA...` | 5-bit delta, exact ON/OFF bitmap |
 | BANK | 두 row 이상 active, span ≤31, 실제 cost 절감 | `HEADER + MASK + TIME + DATA...` | 16-bit tile mask, tile ID 순서 보존 |
 
-정확한 bit field: [docs/PACKET_FORMAT.md](docs/PACKET_FORMAT.md)
+- 정확한 bit field: [docs/PACKET_FORMAT.md](docs/PACKET_FORMAT.md) 참조함
 
 ## Mode 선택 규칙
 
-한 row에서:
+한 row에서 사용하는 기호는 다음과 같음.
 
 - `S`: singleton tile 수
 - `N`: non-singleton tile 수
 - `P = S + N`
 
-Word cost:
+Word cost는 다음과 같음.
 
 ```text
 ROW-only          = P + 2
@@ -110,7 +115,7 @@ SPARSE/ROW hybrid = 2*S + (N + 2, N>0일 때)
 BANK              = total_P + 3
 ```
 
-선택 순서:
+선택 순서는 다음과 같음.
 
 1. Row별 `ROW-only`와 `SPARSE/ROW hybrid` 중 작은 cost 선택
 2. 두 row 이상 active이며 전체 timestamp span ≤31인지 확인
@@ -121,7 +126,7 @@ BANK              = total_P + 3
 
 ## Lossless 정의
 
-`tile_in_valid && tile_in_ready`로 accepted된 transaction 기준 비교임.
+- 비교 기준: `tile_in_valid && tile_in_ready`로 accepted된 transaction임
 
 ```text
 {tile_id, ON[3:0], OFF[3:0], timestamp}
@@ -156,7 +161,7 @@ BANK              = total_P + 3
 
 ### UZH full sweep
 
-Dataset 조건:
+Dataset 조건은 다음과 같음.
 
 - Dataset: UZH Event-Camera Dataset `shapes_rotation`
 - 입력: source event 앞 200,000개
@@ -175,7 +180,7 @@ Dataset 조건:
 | 2000x | 2.8855 | 1.9945 | 30.88% | 36.23% | 644 | 5,051 |
 | 5000x | 2.7852 | 1.9928 | 28.45% | 36.53% | 832 | 4,710 |
 
-해석:
+결과 해석은 다음과 같음.
 
 - 모든 속도에서 약 28~33% word-efficiency 개선
 - 500x부터 RAW보다 많은 event 수용
@@ -196,7 +201,7 @@ Dataset 조건 및 분석: [docs/DATASET_EVALUATION.md](docs/DATASET_EVALUATION.
 | dense | 416 / 1,228 / 2.9519 | 649 / 1,298 / 2.0000 | 32.25% | 649/649 |
 | burst | 423 / 1,237 / 2.9243 | 641 / 1,280 / 1.9969 | 31.71% | 641/641 |
 
-Current mode count:
+V3 mode count는 다음과 같음.
 
 - sparse window: `SPARSE/ROW/BANK = 111/0/0`
 - dense window: `SPARSE/ROW/BANK = 639/2/2`
@@ -211,7 +216,7 @@ Current mode count:
 powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1
 ```
 
-기본 위치가 아닌 경우:
+Vivado가 기본 위치에 없으면 다음과 같이 경로를 지정함.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1 `
@@ -224,9 +229,9 @@ powershell -ExecutionPolicy Bypass -File scripts\regression\run_all_xsim.ps1 `
 powershell -ExecutionPolicy Bypass -File scripts\dataset\run_all_dataset.ps1
 ```
 
-- 원본 dataset: `data/` 아래 저장, Git 추적 제외
-- Fair RAW/Team reference: pinned SHA에서 임시 export, 현재 branch에 merge하지 않음
-- 결과: `results/summary.csv`, `results/metrics/`, `results/logs/`
+- 원본 dataset: `data/` 아래 저장하며 Git에서 제외함
+- Fair RAW/Team reference: pinned SHA에서 임시 export하며 현재 branch에 merge하지 않음
+- 결과 위치: `results/summary.csv`, `results/metrics/`, `results/logs/`임
 
 ## Repository 구성
 
@@ -262,10 +267,10 @@ results/            요약 CSV, 작은 metrics/log, 대표 figure/animation
 | Fair RAW | `aer_v1_raw_top_128`, `ENABLE_BINNING=0` |
 | Team second | `aer_v1_top_128`, `ENABLE_BINNING=1` |
 | Team pinned SHA | `da686477ca054faada5f66d369f1fb253b2bf562` |
-| Current | `aer_top_128` |
-| Current RTL 기준 SHA | `ad8fbd05b88e4645847dc438a5f3be668998882c` |
+| V3 | `aer_top_128` |
+| V3 RTL 기준 SHA | `ad8fbd05b88e4645847dc438a5f3be668998882c` |
 
-세 구조 공통 조건:
+세 구조의 공통 조건은 다음과 같음.
 
 - 128×128 sensor
 - 2×2 tile input
@@ -285,22 +290,24 @@ results/            요약 CSV, 작은 metrics/log, 대표 figure/animation
 - UZH 단일 real dataset 중심 평가
 - CIFAR10-DVS 기존 사용 provenance 미확인
 - Formal verification 미수행
-- Current full Genus Area/Timing/Power 미확정
+- V3 official Genus Area/Timing/Power: full synthesis 미완료로 N/A임
+- V4 official competition 45 nm Genus PPA: 아직 없음
 
 ## 현재 판단과 후속 방향
 
-현재 판단:
+V3 최종 판단은 다음과 같음.
 
-- 기능 정확성: 확보
-- Lossless round-trip: 확보
-- 실제 traffic word 절감: 확보
-- High-load latency trade-off: 존재
-- PPA 적합성: Genus 결과 확인 필요
+- Functional correctness: PASS함
+- Lossless round-trip: PASS함
+- UZH word reduction: 28.45~33.24% 확보함
+- High-load latency: tail-latency trade-off 존재함
+- Genus synthesis feasibility: 제출 가능 시간 안에 완료되지 않아 NO-GO임
+- Official 45 nm Genus PPA: N/A임
 
-후속 검토:
+V4 후속 상태는 다음과 같음.
 
-- 현재 SPARSE/ROW/BANK를 먼저 PPA 기준선으로 확보
-- 실제 BANK 사용 빈도가 매우 낮다는 점을 근거로 `SPARSE/ROW` 경량화 가능성 검토
-- 경량화는 현재 candidate와 분리된 후속 후보로만 수행
-- 현재 RTL의 packet format 또는 기능을 PPA 결과 전에 임의 변경하지 않음
-- Innovus/P&R은 Genus 판단 이후 별도 단계
+- BANK와 bank-wide 분석을 제거한 별도 RTL로 구현함
+- Functional regression과 random round-trip PASS함
+- Research-lab SAED32 DC full synthesis 완료함
+- 100 MHz timing은 WNS -18.27 ns로 FAIL함
+- V3/V4 상세 비교: `docs/AER_V3_V4_DESIGN_EVOLUTION.md` 참조 필요함

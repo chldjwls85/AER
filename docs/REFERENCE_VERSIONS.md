@@ -1,5 +1,9 @@
 # Reference Versions
 
+- 목적: 비교에 사용한 branch/commit/dataset 기준을 고정해 결과 혼동을 방지함
+- 주의: 표의 `Current`는 V3 SPARSE/ROW/BANK 평가 당시 명칭임
+- V3/V4 최종 상태: `AER_V3_V4_DESIGN_EVOLUTION.md` 참조 필요함
+
 | Item | Value |
 |---|---|
 | Repository | `https://github.com/chldjwls85/AER` |
@@ -23,7 +27,7 @@
 | UZH archive SHA-256 | `56aade6bf53dcf73e8fe40905ccac8385cd7606bc9a85103bf2c9f9045117551` |
 | Current full-gate decision | `READY FOR CADENCE EVALUATION` |
 
-- Team 비교 입력: pinned SHA에서 export
-- Team branch 후속 변경: 현재 비교 결과에 미반영
-- Current Cadence 입력: `ad8fbd05...` 기준
+- Team 비교 입력: pinned SHA에서 export함
+- Team branch 후속 변경: 현재 비교 결과에 반영하지 않음
+- V3 Cadence 입력: `ad8fbd05...` 기준임
 - 문서 정리 commit: RTL 기능 변경 없음

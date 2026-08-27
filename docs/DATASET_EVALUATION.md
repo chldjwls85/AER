@@ -1,5 +1,8 @@
 # Dataset Evaluation
 
+> 명칭 주의: 본 문서의 `Current`는 V3 SPARSE/ROW/BANK candidate를 의미함.
+> V4 full UZH sweep 결과는 현재 tracked result에 없음.
+
 ## Provenance
 
 | Item | Recorded value |
@@ -14,14 +17,13 @@
 | Clock | 100 MHz |
 | Full evaluation date | 2026-08-26 KST |
 
-CIFAR10-DVS, `cifar10dvs`, `CIFAR10`, `cifar`, and `.aedat` were searched in
-all Git refs/history and under the local `C:\Project_V2\AI-semi` tree. No
-script, result, dataset, or commit proved prior use, so **CIFAR10-DVS use is not
-confirmed in the existing team GitHub/local material**. It is not labelled a
-team reproduction dataset.
-
-Raw data and generated wide RTL vectors are under ignored `data/`. Reproduce
-the complete flow with:
+- CIFAR10-DVS 검색 범위: 모든 Git refs/history와 local `C:\Project_V2\AI-semi` tree임
+- 검색 keyword: `cifar10dvs`, `CIFAR10`, `cifar`, `.aedat`임
+- 검색 결과: 기존 사용을 입증하는 script/result/dataset/commit을 찾지 못함
+- 결론: **기존 team GitHub/local 자료에서 CIFAR10-DVS 사용 이력을 확인할 수 없음**
+- 주의: 확인되지 않은 CIFAR10-DVS를 team reproduction dataset으로 표기하지 않음
+- Raw/generated data: Git에서 제외된 `data/` 아래에 저장함
+- 전체 flow 재현 명령은 다음과 같음
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\dataset\run_all_dataset.ps1
@@ -29,25 +31,26 @@ powershell -ExecutionPolicy Bypass -File scripts\dataset\run_all_dataset.ps1
 
 ## Canonical trace and loss accounting
 
-The loader follows the pinned order: read 200,000 rows, quantize from the first
-source timestamp, crop, then rebase coordinates. Each event becomes
-`event_id,timestamp,cycle,x,y,polarity`. Events sharing a `{cycle, 2x2 tile}`
-are OR-reduced into one transaction with `tile_id, ON[3:0], OFF[3:0]`.
-
-The 1000x trace has 92,669 tile transactions and 92,861 canonical polarity
-bits. There are no source-to-interface duplicate losses in this trace: its
-92,861 cropped source events remain 92,861 canonical bits. A transaction not
-accepted because `ready=0` is reported as input backpressure, not internal
-loss. Every accepted RTL transaction is decoded and compared; unintended loss
-is zero in all nine XSim runs.
+- Loader 순서: source 200,000 rows read → 첫 timestamp 기준 quantization → crop → coordinate rebase임
+- Common event format: `event_id,timestamp,cycle,x,y,polarity`임
+- Canonical transaction: 동일 `{cycle, 2x2 tile}` event를 OR-reduce함
+- Transaction payload: `tile_id, ON[3:0], OFF[3:0]`임
+- 1000× tile transaction: 92,669건임
+- 1000× canonical polarity bits: 92,861개임
+- Source-to-interface duplicate loss: 0임. Cropped source event 92,861개가 canonical bit 92,861개로 유지됨
+- `ready=0` 미수용: internal loss가 아니라 input backpressure로 집계함
+- Accepted RTL transaction: 모두 decode 후 원본과 비교함
+- Nine XSim runs unintended loss: 0임
 
 ## Software sweep
 
-The software model uses one 16-bit word/cycle link, packet-locked bank round
-robin, one pending slot/tile, exact packet costs and format-selection rules.
-It is used for the long sweep; its latency is an architecture/link model, not
-post-layout timing. Sparse/dense/burst windows are cross-checked in actual RTL
-XSim to bound model risk.
+- Link model: 16-bit word/cycle 1개임
+- Arbitration: packet-locked bank round-robin임
+- Pending storage: tile당 1 slot임
+- Encoding: RTL과 동일한 packet cost와 format-selection rule 사용함
+- 사용 목적: 긴 full sweep의 architecture/link latency 분석임
+- 주의: software latency는 post-layout timing이 아님
+- Model risk 확인: sparse/dense/burst window를 actual RTL XSim과 cross-check함
 
 | Speed | Design | Accepted events/transactions | Backpressured events/transactions | Output words | Words/input | Words/accepted | Bits/accepted | Mean | P99 | Throughput | Max pending | S/R/B packets | Loss |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -66,18 +69,20 @@ XSim to bound model risk.
 | 5000x | RAW / Team | 12,572 / 12,503 | 80,289 / 79,678 | 35,015 | 0.3771 | 2.7852 | 44.56 | 288.29 | 832 | 0.331426 | 205 | 0/11,256/0 | 0 |
 | 5000x | Current | 17,165 / 17,093 | 75,696 / 75,088 | 34,207 | 0.3684 | 1.9928 | 31.89 | 504.79 | 4,710 | 0.447938 | 529 | 16,888/110/2 | 0 |
 
-The complete 21-row table is `results/summary.csv`. RAW and Team word counts
-are identical for this trace. The long sweep selects one GROUP3 token at each
-of 500x, 1000x, and 2000x, but this does not change total word cost; all other
-accepted Team tokens are RAW8 and no BIN4/pair token is selected. The real data
-is overwhelmingly one polarity bit per tile-cycle.
+- 전체 21-row table: `results/summary.csv`에 저장함
+- RAW/Team word count: 이 trace에서 동일함
+- GROUP3: 500×/1000×/2000×에서 각각 1회 선택되지만 total word cost는 변하지 않음
+- 나머지 Team token: RAW8임
+- BIN4/pair token: 선택되지 않음
+- Workload 해석: real data 대부분이 tile-cycle당 polarity bit 1개인 singleton임
 
 ## Actual RTL XSim windows
 
-At 1000x, deterministic windows are selected from all non-overlapping bins:
-the 25th-percentile occupied bin (`sparse`), maximum 1024-cycle bin (`dense`),
-and the maximum 128-cycle burst centered in 1024 cycles (`burst`). This avoids
-manual cherry-picking.
+- 기준 speed: 1000×임
+- `sparse`: non-overlapping occupied bin 중 25th-percentile bin임
+- `dense`: maximum 1024-cycle bin임
+- `burst`: 1024-cycle 구간 안의 maximum 128-cycle burst임
+- 선택 목적: manual cherry-picking 방지함
 
 | Window | Design | Accepted transactions | Output words | Words/accepted | Round-trip |
 |---|---|---:|---:|---:|---|
@@ -91,40 +96,38 @@ manual cherry-picking.
 | burst | Team second | 423 | 1,237 | 2.9243 | PASS |
 | burst | Current | 641 | 1,280 | 1.9969 | PASS |
 
-All three tops were separately compiled and elaborated in Vivado 2019.1 XSim.
-Current의 sparse/dense/burst word-efficiency 개선은 각각 33.33%, 32.25%,
-31.71%이며 dense/burst accepted transaction도 크게 증가했다. 모든 Current
-decoder result는 missing/extra/payload/timestamp mismatch 0이다.
+- Compile/elaboration: 세 top을 Vivado 2019.1 XSim에서 각각 독립 수행함
+- Current word-efficiency 개선: sparse 33.33%, dense 32.25%, burst 31.71%임
+- Accepted transaction: dense/burst에서 크게 증가함
+- Decoder result: missing/extra/payload/timestamp mismatch 모두 0임
 
 ## Evidence-driven iteration
 
-Previous ROW/BANK에서 한 limited iteration으로 `ST_ANALYZE`를 지연했다. Full
-regression은 PASS했지만 dense XSim은 1,516 words로 같았고 accepted transaction은
-533에서 531로 감소했다. Burst도 한 word만 줄면서 accepted transaction이 하나
-감소해 해당 변경을 revert했다. 이후 workload evidence에 따라 singleton용
-SPARSE format을 한 번 추가했고, 이 SPARSE/ROW/BANK candidate는 추가 redesign
-없이 full gate를 통과했다.
+- 시도: Previous ROW/BANK의 `ST_ANALYZE`를 지연하는 limited iteration 수행함
+- Functional result: full regression PASS함
+- Dense result: 1,516 words로 동일하고 accepted transaction은 533→531로 감소함
+- Burst result: 1 word 감소했지만 accepted transaction도 1건 감소함
+- 판단: 실익이 없어 해당 변경을 revert함
+- 후속 변경: workload evidence에 따라 singleton용 SPARSE format 추가함
+- 최종 결과: SPARSE/ROW/BANK candidate가 추가 redesign 없이 full gate 통과함
 
 ## Visual QA
 
-- `results/figures/uzh_dense_event_comparison.png`: original and all decoded
-  event maps; x grows right, y grows down, ON red and OFF blue.
-- `results/figures/uzh_activity_mode_map.png`: bank activity and multi-row
-  opportunity distribution.
-- `results/figures/uzh_performance_comparison.png`: efficiency, latency,
-  throughput, backpressure and mode fraction.
-- `results/animations/uzh_shapes_rotation_compare.gif`: 24 nonempty frames,
-  800x440, original versus current accepted/decoded events.
-
-The PNGs and first/last animation frames were opened after generation. No
-empty/corrupt image, coordinate inversion, or single-frame animation was found.
+- `results/figures/uzh_dense_event_comparison.png`: original/decoded event map 비교함. x는 오른쪽, y는 아래쪽, ON은 red, OFF는 blue임
+- `results/figures/uzh_activity_mode_map.png`: bank activity와 multi-row opportunity 분포를 표시함
+- `results/figures/uzh_performance_comparison.png`: efficiency/latency/throughput/backpressure/mode fraction을 표시함
+- `results/animations/uzh_shapes_rotation_compare.gif`: 800×440, nonempty 24 frames로 original과 accepted/decoded event를 비교함
+- Visual 확인: 생성 후 PNG와 animation 첫/마지막 frame을 직접 확인함
+- 이상 여부: empty/corrupt image, coordinate inversion, single-frame animation 없음
 
 ## SPARSE/ROW/BANK full-evaluation conclusion (2026-08-26)
 
-기존 provenance, crop, canonicalization을 그대로 재사용해 7-speed sweep과 9개
-RTL window를 모두 재실행했다. RAW 대비 words/accepted-event 개선은 모든 속도에서
-28.45~33.24%이며 SPARSE fraction은 Current에서 99.34% 이상이다. 500x부터
-accepted event가 뚜렷하게 증가하지만 1000x 이상 P99는 RAW보다 높다. 더 많은
-traffic을 수용하면서 single global link queue가 길어지는 trade-off이며 unintended
-loss는 0이다. 결과는 `results/summary.csv`와 `results/metrics/dataset_results.json`
-에 기록했다.
+- 재현 조건: 기존 provenance/crop/canonicalization을 그대로 사용함
+- 실행 범위: 7-speed sweep과 RTL window 9개임
+- Word efficiency: RAW 대비 28.45~33.24% 개선함
+- SPARSE fraction: Current에서 99.34% 이상임
+- Acceptance: 500×부터 RAW보다 뚜렷하게 증가함
+- Latency: 1000× 이상 P99는 RAW보다 높음
+- 해석: 더 많은 traffic 수용으로 single global link queue가 길어지는 trade-off임
+- Unintended loss: 0임
+- 결과 위치: `results/summary.csv`, `results/metrics/dataset_results.json`임

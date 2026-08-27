@@ -1,10 +1,9 @@
 # AER V3/V4 설계 진화와 최종 상태
 
-이 문서는 `AER_hyeonho` branch에서 Design Direction 2의 ROW/BANK 구조가 V3
-SPARSE/ROW/BANK를 거쳐 V4 Lightweight SPARSE/ROW로 바뀐 이유와 각 단계의 최종
-상태를 기록한다. Functional correctness, transmission efficiency, latency,
-synthesis feasibility, Area/Timing, official competition PPA를 서로 다른 판단 축으로
-구분한다.
+- 목적: Design Direction 2 → V3 → V4로 Architecture가 변경된 이유와 최종 상태를 기록함
+- Branch: `AER_hyeonho`임
+- 구분 기준: Functional correctness, transmission efficiency, latency, synthesis feasibility, Area/Timing, official competition PPA임
+- 원칙: 기능 PASS와 PPA 적합성을 같은 의미로 사용하지 않음
 
 ## 결론 요약
 
@@ -42,10 +41,10 @@ V4: Lightweight SPARSE / ROW
 
 ### 문제와 가설
 
-Previous ROW/BANK 구조는 128×128 sensor를 2×2 pixel tile로 나누고, 4×4 tiles
-(8×8 pixels)를 한 bank로 묶어 총 256 banks를 구성했다. 같은 bank의 여러 row가
-동시에 활성화되고 timestamp delta가 31 이내이면 BANK packet이 metadata를 공유해
-dense/clustered traffic의 word 수를 크게 줄일 수 있다고 예상했다.
+- Sensor 구성: 128×128 pixels를 2×2 pixel tile로 나눔
+- Bank 구성: 4×4 tiles(8×8 pixels)를 1 bank로 묶어 총 256 banks 구성함
+- BANK 조건: 같은 bank의 여러 row가 활성화되고 timestamp delta가 31 이내여야 함
+- 초기 가설: BANK packet의 metadata 공유로 dense/clustered traffic word 수를 크게 줄일 수 있다고 예상함
 
 ### 검증 결과
 
@@ -58,18 +57,19 @@ dense/clustered traffic의 word 수를 크게 줄일 수 있다고 예상했다.
 
 ### 판단
 
-기능은 맞았지만 실제 UZH workload에서 multi-row BANK opportunity가 너무 드물었다.
-희소한 경우를 위한 bank-wide 구조 복잡도와 긴 packet lock을 정당화할 만큼 전송
-효율이 개선되지 않아 **NO-GO**로 판단했다.
+- Functional correctness: 확보함
+- 실제 문제: UZH workload의 multi-row BANK opportunity가 매우 드묾
+- Trade-off: 희소한 pattern을 위해 bank-wide logic과 긴 packet lock이 필요함
+- 결론: 구조 복잡도를 정당화할 전송 효율이 없어 **NO-GO**로 판단함
 
 ## 2. V3: SPARSE/ROW/BANK
 
 ### 변경 원인
 
-Previous ROW/BANK 결과 이후 UZH tile-cycle 분포를 다시 분석한 결과, 대부분의 2×2
-tile transaction에서 `ON[3:0]`과 `OFF[3:0]` 전체 중 event bit 하나만 set된
-singleton이 지배적이었다. V3는 드문 multi-row BANK를 더 최적화하는 대신 가장
-자주 나타나는 singleton의 packet cost를 직접 줄였다.
+- 재분석 대상: UZH tile-cycle transaction 분포임
+- 관측 결과: `ON[3:0]`과 `OFF[3:0]` 전체 중 event bit 1개인 singleton이 지배적임
+- 설계 방향: 드문 multi-row BANK 추가 최적화보다 흔한 singleton의 packet cost 감소를 우선함
+- V3 핵심 변경: singleton을 위한 SPARSE packet 추가함
 
 ### Architecture와 packet format
 
@@ -79,8 +79,8 @@ singleton이 지배적이었다. V3는 드문 multi-row BANK를 더 최적화하
 - packet-locked 2-stage hierarchical global readout
 - pixel position, polarity, 16-bit timestamp 보존
 
-기존 singleton ROW packet은 `HEADER + TIMESTAMP + DATA`의 3 words다. V3 SPARSE는
-다음 2 words로 동일 정보를 lossless하게 표현한다.
+- 기존 singleton ROW cost: `HEADER + TIMESTAMP + DATA` = 3 words임
+- V3 SPARSE cost: 다음 2 words로 동일 정보를 lossless하게 표현함
 
 | Word | 내용 |
 |---|---|
@@ -93,12 +93,12 @@ singleton이 지배적이었다. V3는 드문 multi-row BANK를 더 최적화하
 - Directed/random round-trip: 2050/2050 exact reconstruction PASS
 - unintended loss: 0
 
-이는 packet sequence가 짧아졌다는 사실과 별개로, accepted transaction의 pixel,
-polarity, timestamp가 decoder에서 정확히 복원됐음을 의미한다.
+- 의미: packet 길이 감소와 별개로 accepted pixel/polarity/timestamp가 decoder에서 정확히 복원됨
 
 ### Transmission efficiency와 latency trade-off
 
-아래 값은 **V3 full UZH evaluation 결과**이며 V4 결과가 아니다.
+- 수치 범위: 아래 값은 **V3 full UZH evaluation 결과**임
+- 주의: V4 Dataset 결과로 재사용하면 안 됨
 
 | Playback speed | RAW 대비 V3 word 감소 |
 |---:|---:|
@@ -110,27 +110,28 @@ polarity, timestamp가 decoder에서 정확히 복원됐음을 의미한다.
 | 2000× | 30.88% |
 | 5000× | 28.45% |
 
-1000×에서 accepted transaction은 RAW 46,610에서 V3 63,458로 36.15% 증가했다.
-반면 P99 latency는 RAW 502 cycles에서 V3 2,577 cycles로 증가했고, 2000×와
-5000×에서도 긴 tail latency가 관측됐다. 즉 link word efficiency와 accepted-event
-수는 개선됐지만, 더 많은 traffic을 single global link가 수용하면서 high-load
-queueing latency가 증가하는 trade-off가 있다.
+- 1000× accepted transaction: RAW 46,610 → V3 63,458로 36.15% 증가함
+- 1000× P99 latency: RAW 502 cycles → V3 2,577 cycles로 증가함
+- 2000×/5000×: 긴 tail latency가 계속 관측됨
+- 이점: link word efficiency와 accepted-event 수가 개선됨
+- 한계: single global link queue 증가로 high-load latency가 악화됨
+- 해석: throughput/acceptance와 tail latency 사이의 trade-off임
 
 ## 3. V3 Genus synthesis 최종 상태
 
-V3는 RTL 기능 오류로 synthesis가 실패한 것이 아니다. 실제 진행 순서는 다음과
-같다.
+- 핵심 구분: V3 중단 원인은 RTL functional bug가 아님
+- 실제 진행 순서는 다음과 같음
 
-1. 초기 Genus run에서 공유 `/home` storage 여유가 감소해 disk guard가 동작한
-   이력이 있었다.
-2. 이후 `/tmp` 중심 run 환경으로 정리해 다시 진행했다.
-3. RTL read와 elaboration은 정상 완료됐다.
-4. `syn_generic`의 Distributed Optimization까지 진입했다.
-5. 재진행 run도 9시간 이상 진행했지만 `syn_generic`에서 완료되지 않았다.
-6. 제출 일정 때문에 사용자가 최종적으로 수동 중단했다.
-7. `syn_map`/`syn_opt`에는 도달하지 못했으며 최종 Area/Timing/Power report는 없다.
+1. 초기 Genus run: 공유 `/home` storage 감소로 disk guard 동작 이력 있음
+2. 재진행 환경: `/tmp` 중심으로 정리함
+3. RTL read/elaboration: 정상 완료함
+4. `syn_generic`: Distributed Optimization까지 진입함
+5. Runtime: 9시간 이상 진행했으나 `syn_generic`에서 완료되지 않음
+6. 종료 사유: 제출 일정 때문에 사용자가 수동 중단함
+7. 미도달 단계: `syn_map`, `syn_opt`임
+8. 미생성 결과: Area/Timing/Power report임
 
-따라서 V3의 상태는 다음과 같이 분리해야 한다.
+V3 상태는 다음과 같이 분리함.
 
 - Functional / transmission efficiency: **SUCCESS**
 - Synthesis feasibility / completion time: **NO-GO**
@@ -138,9 +139,11 @@ V3는 RTL 기능 오류로 synthesis가 실패한 것이 아니다. 실제 진�
 
 ### 장시간 synthesis의 가장 유력한 structural cause
 
-`aer_bank_packetizer.v`는 각 bank에서 전체 16 tile pending scan, bank-wide
-timestamp min/max와 delta 계산, multi-row cost 합산, SPARSE/ROW/BANK 3-way cost
-비교, BANK snapshot 결정을 수행한다. 이 logic이 256 banks에 반복된다.
+- Bank당 logic: 16 tile pending scan 수행함
+- Timestamp logic: bank-wide min/max와 delta 계산함
+- Cost logic: multi-row 합산과 SPARSE/ROW/BANK 3-way 비교 수행함
+- Snapshot logic: BANK 대상 tile을 결정함
+- Replication: 위 logic이 256 banks에 반복됨
 
 ```text
 bank-wide 16-slot analysis
@@ -149,18 +152,18 @@ bank-wide 16-slot analysis
   × 256 banks
 ```
 
-이 설명은 EDA tool 내부 원인에 대한 확정 진단이 아니다. RTL 구조와 장시간
-`syn_generic` 진행을 종합할 때 optimization complexity를 키운 **가장 유력한
-structural cause**로 판단한 것이다.
+- 확정 여부: EDA tool 내부 원인에 대한 확정 진단은 아님
+- 판단 근거: 반복 RTL 구조와 장시간 `syn_generic` 진행을 함께 고려함
+- 결론: optimization complexity를 키운 **가장 유력한 structural cause**로 판단함
 
 ## 4. V4: Lightweight SPARSE/ROW
 
 ### 변경 원인과 목표
 
-V3는 전송 효율이 좋아도 제출 가능한 시간 안에 합성이 끝나지 않으면 최종 hardware
-candidate가 될 수 없다는 점을 보여줬다. 동시에 workload 개선의 대부분은 BANK가
-아니라 SPARSE에서 발생했다. V4는 “V3의 useful path는 유지하고 rare-case
-optimization은 제거”하는 synthesis-aware simplification이다.
+- V3 교훈: 전송 효율이 좋아도 제한 시간 안에 synthesis가 끝나야 hardware candidate로 사용 가능함
+- Workload 근거: 개선의 대부분이 BANK가 아니라 SPARSE에서 발생함
+- V4 원칙: V3의 useful path는 유지하고 rare-case optimization은 제거함
+- 설계 성격: synthesis-aware simplification임
 
 ### Architecture
 
@@ -170,19 +173,22 @@ optimization은 제거”하는 synthesis-aware simplification이다.
 - 기존 packet-locked 2-stage global readout 재사용
 - active row 하나를 선택하고 해당 row의 최대 4 tiles만 분석
 
-V3 대비 BANK header/mask/timestamp serialization, bank-wide 16-tile min/max scan,
-multi-row bank cost, SPARSE/ROW/BANK 3-way comparison을 제거했다. V4의 주요 RTL은
-다음과 같으며 V3 파일을 덮어쓰지 않고 별도 보존된다.
+- V3 대비 제거: BANK header/mask/timestamp serialization임
+- V3 대비 제거: bank-wide 16-tile min/max scan임
+- V3 대비 제거: multi-row bank cost와 3-way mode comparison임
+- 보존 원칙: V3 파일을 덮어쓰지 않고 V4 RTL을 별도 파일로 유지함
+- V4 주요 RTL은 다음과 같음
 
 - `rtl/bank/aer_bank_packetizer_v4.v`
 - `rtl/aer_top_v4.v`
 - `rtl/filelist_v4.f`
 - synthesis top: `aer_top_v4_128`
 
-선택 row에서 singleton 수를 `S`, non-singleton 수를 `N`, 전체 tile 수를
-`P=S+N`이라 하면 V4는 `IndividualCost=2*S+3*N`, `RowCost=P+2`를 비교한다.
-`RowCost`가 strictly smaller일 때만 ROW를 선택하고, 동률이면 packet lock이 짧은
-individual SPARSE 또는 single-tile ROW fallback을 사용한다.
+- Cost 정의: `S`=singleton 수, `N`=non-singleton 수, `P=S+N`임
+- Individual cost: `2*S+3*N`임
+- ROW cost: `P+2`임
+- ROW 선택: `RowCost`가 strictly smaller일 때만 수행함
+- Tie-break: individual SPARSE 또는 single-tile ROW fallback을 사용함
 
 ### Functional verification
 
@@ -191,14 +197,15 @@ individual SPARSE 또는 single-tile ROW fallback을 사용한다.
 - reset, output wait, contention, backpressure test PASS
 - pixel position, polarity, timestamp lossless reconstruction PASS
 
-현재 repository에 tracked된 V4 결과는 `results/logs/regression_v4_summary.txt`의
-functional regression summary다. V4 전용 full UZH sweep metric은 확인되지 않으므로
-V3의 28.45~33.24% 수치를 V4 transmission result로 재사용하지 않는다.
+- Tracked V4 결과: `results/logs/regression_v4_summary.txt`의 functional summary임
+- V4 full UZH sweep: 확인된 tracked metric 없음
+- 금지 사항: V3의 28.45~33.24%를 V4 transmission result로 재사용하지 않음
 
 ## 5. V4 research-lab DC structural screening
 
-이 결과는 V4의 synthesis feasibility와 구조적 hotspot을 보기 위한 연구실 보조
-실험이다. **대회 공식 Genus/PPA 결과가 아니다.**
+- 목적: V4 synthesis feasibility와 structural hotspot 확인함
+- 성격: 연구실 보조 screening임
+- 공식성: **대회 공식 Genus/PPA 결과가 아님**
 
 ### 조건
 
@@ -228,13 +235,14 @@ V3의 28.45~33.24% 수치를 V4 transmission result로 재사용하지 않는다
 | Design Area | 3,511,071.11 |
 | Power | N/A (`report_power` 미실행) |
 
-`Estimated Fmax`는 `1 / 28.05 ns`에 근거한 약 35 MHz의 pre-layout/pre-CTS DC
-screening 추정치다. 최종 silicon 또는 signoff Fmax가 아니다. 10 ns constraint에서는
-WNS -18.27 ns이므로 100 MHz timing을 만족하지 못한다.
+- `Estimated Fmax`: `1 / 28.05 ns`로 계산한 약 35 MHz임
+- 해석 범위: pre-layout/pre-CTS DC screening 추정치임
+- 주의: final silicon/signoff Fmax가 아님
+- 100 MHz 결과: 10 ns constraint에서 WNS -18.27 ns이므로 timing FAIL함
 
 ### Timing root cause
 
-worst setup path는 주로 다음 형태다.
+- Worst setup path 형태는 다음과 같음
 
 ```text
 aer_timebase/time_now register
@@ -243,26 +251,24 @@ aer_timebase/time_now register
   -> stored_time register
 ```
 
-`rtl/common/aer_timebase.v`의 `time_now`가 `rtl/aer_top_v4.v`에서 256 bank의
-`time_now` 입력으로 배포되고, `rtl/bank/aer_bank_packetizer_v4.v`의 accepted tile
-capture 경로에서 `stored_time`에 저장된다. 따라서 현재 primary bottleneck은 global
-readout arbiter보다 timestamp distribution/capture path다.
-
-TIM-134의 111,369-load high-fanout warning은 **clock net**에 대한 warning이다.
-`time_now` fanout이 111,369이라는 뜻이 아니다.
+- Source: `rtl/common/aer_timebase.v`의 `time_now` register임
+- Distribution: `rtl/aer_top_v4.v`에서 256 bank의 `time_now` 입력으로 연결함
+- Capture: `rtl/bank/aer_bank_packetizer_v4.v`의 `stored_time`에 저장함
+- Primary bottleneck: global readout보다 timestamp distribution/capture path임
+- TIM-134 의미: 111,369-load high-fanout은 **clock net** warning임
+- 오해 금지: `time_now` fanout이 111,369라는 의미가 아님
 
 ### Area hotspot
 
-hierarchical Area 해석은 다음과 같다.
+Hierarchical Area 해석은 다음과 같음.
 
 1. 약 97.8%: 256 × bank packetizer replicas
 2. 약 2.0%: global readout hierarchy
 3. 나머지 약 0.2%: top/timebase 등
 
-따라서 dominant hotspot은 global arbiter 하나가 아니라 bank storage와 packetization
-logic이 256번 반복되는 구조다. 다만 절대 Area의 좋고 나쁨은 동일 tool/library/PVT/
-constraint reference와 비교해야 한다. SAED32 DC Area와 대회 GSCLIB045 45 nm Genus
-Area는 직접 비교할 수 없다.
+- Dominant hotspot: global arbiter 1개가 아니라 bank storage/packetization의 256회 반복임
+- 절대 Area 판단 조건: 동일 tool/library/PVT/constraint reference가 필요함
+- 직접 비교 금지: SAED32 DC Area와 GSCLIB045 45 nm Genus Area임
 
 ## 6. 최종 판단과 한계
 
@@ -277,9 +283,10 @@ Area는 직접 비교할 수 없다.
 | Power | N/A | N/A |
 | Official 45 nm Genus PPA | N/A | 아직 없음 |
 
-V4는 V3보다 synthesis-friendly한 구조로 단순화하는 데 성공했지만 100 MHz timing은
-추가 개선이 필요하다. 다음 candidate는 V4를 fallback/reference로 보존하면서
-timestamp distribution/capture path와 반복 bank structure를 우선 검토해야 한다.
+- Synthesis simplification: V3 대비 성공함
+- 100 MHz timing: 추가 개선 필요함
+- 보존 원칙: V4를 fallback/reference로 유지함
+- 다음 검토 우선순위: timestamp distribution/capture path와 반복 bank structure임
 
 ## 7. Version provenance
 
@@ -292,6 +299,5 @@ timestamp distribution/capture path와 반복 bank structure를 우선 검토해
 | V4 Genus SystemVerilog parser alignment | `4e3b917` |
 | SAED32 DC comparison handoff / 문서화 직전 HEAD | `1fd5da5` |
 
-각 수치의 상세 provenance는 `DATASET_EVALUATION.md`, `VERIFICATION.md`,
-`REFERENCE_VERSIONS.md`, `GENUS_V4_HANDOFF.md`, `DC_SAED32_COMPARISON.md`를 함께
-참조한다.
+- 상세 provenance: `DATASET_EVALUATION.md`, `VERIFICATION.md`, `REFERENCE_VERSIONS.md` 참조함
+- Synthesis handoff 조건: `GENUS_V4_HANDOFF.md`, `DC_SAED32_COMPARISON.md` 참조함

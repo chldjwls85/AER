@@ -1,8 +1,10 @@
 # Cadence Handoff
 
-## Status: CADENCE EVALUATION IN PROGRESS
+## Status: Historical V3 handoff record
 
-Current SPARSE/ROW/BANK의 local 기능·traffic gate 통과 상태임.
+> 이 문서는 V3를 Cadence에 전달하던 당시 조건을 보존한 기록임.
+> 이후 V3 Genus run은 `syn_generic` 장시간 진행 후 수동 중단됐으며 full PPA는 없음.
+> 최종 V3/V4 상태는 `AER_V3_V4_DESIGN_EVOLUTION.md` 참조 필요함.
 
 - 7-speed UZH: RAW 대비 words/accepted-event 28.45~33.24% 감소
 - Functional XSim: 5/5 PASS
@@ -12,7 +14,7 @@ Current SPARSE/ROW/BANK의 local 기능·traffic gate 통과 상태임.
 - Current full Genus: 2026-08-27 KST 기준 실행 중, Area/Timing/Power 미확정
 - Innovus/P&R: 미수행
 
-Candidate handoff:
+Candidate handoff 조건은 다음과 같음.
 
 | Item | Candidate |
 |---|---|
@@ -52,10 +54,11 @@ Candidate handoff:
 | Current top | `aer_top_128` |
 | Filelist | `rtl/filelist.f` |
 
-Current full Genus는 문서 정리 시점에 진행 중임. 최종 report 생성 전까지 Area,
-WNS, cell count 또는 Power를 확정값으로 기록하지 않음.
+- 당시 상태: Current full Genus 진행 중이었음
+- 기록 원칙: 최종 report 생성 전에는 Area/WNS/cell count/Power를 확정값으로 기록하지 않음
+- 최종 결과: V3 full Genus report 미생성 상태로 종료됨
 
-최종 PPA 분석 원칙:
+최종 PPA 분석 원칙은 다음과 같음.
 
 - SPARSE cost-analysis logic의 Area/Timing/Power overhead 공개
 - Team pinned result와 library/PVT/constraint 일치 여부 확인

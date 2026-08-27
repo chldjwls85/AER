@@ -1,5 +1,8 @@
 # Architecture
 
+> 문서 범위: V3 `aer_top_128`과 `aer_bank_packetizer` 기준 Architecture임.
+> V4 차이점은 `AER_V3_V4_DESIGN_EVOLUTION.md` 참조 필요함.
+
 ## Hierarchy
 
 ```text
@@ -22,9 +25,10 @@ root aer_packet_mux
 16-bit out_data / out_valid / out_ready / out_last
 ```
 
-`aer_top`은 sensor 크기를 8-pixel bank 단위로 parameterize하며
-`aer_top_128`은 128×128 wrapper다. 입력은 bank-major이고 local tile ID는
-`row*4+column`이다.
+- `aer_top`: sensor 크기를 8-pixel bank 단위로 parameterize함
+- `aer_top_128`: 128×128 고정 wrapper임
+- 입력 배열 순서: bank-major임
+- Local tile ID 계산: `row*4+column`임
 
 ## Modules
 
@@ -40,39 +44,40 @@ root aer_packet_mux
 
 ## Bank behavior
 
-각 tile은 한 개의 pending slot에 accepted ON/OFF bitmap과 16-bit timestamp를
-저장한다. 한 polarity bit만 가진 transaction은 SPARSE 후보이며 주소와 full
-timestamp를 2 words로 보낸다. packetizer는 row별 ROW cost와 SPARSE/ROW 혼합
-cost를 합산하고, 전체 BANK cost가 그보다 엄격히 작으며 timestamp span이 31
-이하일 때만 BANK를 선택한다. 동률이면 packet lock이 짧은 SPARSE/ROW를 택한다.
-ROW에서는 5-bit delta에 들어가는 tile만 현재 packet에 포함한다.
+- Pending storage: tile마다 accepted ON/OFF bitmap과 16-bit timestamp를 1개씩 저장함
+- SPARSE 후보: ON/OFF 전체에서 polarity bit 1개만 set된 transaction임
+- SPARSE 전송: address와 full timestamp를 2 words로 전송함
+- ROW 포함 조건: base timestamp 대비 5-bit delta 범위에 들어오는 tile만 포함함
+- BANK 선택 조건: 전체 timestamp span이 31 이하이고 BANK cost가 대안보다 strictly smaller여야 함
+- Tie-break: 동일 cost이면 packet lock이 짧은 SPARSE/ROW를 우선함
 
-한 row에서 `S`는 singleton, `N`은 non-singleton, `P=S+N`이라 할 때 비용은
-다음과 같다.
+한 row에서 사용하는 기호와 비용은 다음과 같음.
+
+- `S`: singleton tile 수임
+- `N`: non-singleton tile 수임
+- `P=S+N`: active tile 수임
 
 - ROW-only: `P + 2`
 - SPARSE/ROW hybrid: `2*S + (N+2 if N>0 else 0)`
 - BANK snapshot: `total P + 3`
 
-각 row는 앞의 두 비용 중 작은 값을 쓰며, BANK는 active row가 둘 이상이고 전체
-timestamp span이 31 이하이면서 row별 최소 비용 합보다 strictly cheaper일 때만
-선택한다. 동률이면 더 짧은 SPARSE/ROW packet lock을 우선한다.
-
-DATA word가 `out_valid && out_ready`로 수용될 때만 해당 pending slot을 해제한다.
-역압 동안 `out_data/out_valid/out_last`는 안정적으로 유지된다.
+- Row별 기준 cost: `ROW-only`와 `SPARSE/ROW hybrid` 중 작은 값 사용함
+- BANK 사용 조건: active row 2개 이상, timestamp span 31 이하, row별 최소 cost 합보다 저렴해야 함
+- Pending clear: DATA word가 `out_valid && out_ready`로 handshake될 때만 수행함
+- Backpressure: `out_data/out_valid/out_last`를 handshake 전까지 안정적으로 유지함
 
 ## Global readout
 
-128×128 구성은 16×16 banks를 4×4 spatial regions로 나눈다. 각 region은
-packet 끝(`last`)까지 한 bank를 고정하고, 선택 결과를 2-entry buffer에 넣는다.
-root mux도 같은 packet-lock을 적용하므로 서로 다른 bank packet이 interleave되지
-않는다. 각 arbitration point는 round-robin pointer로 다음 packet 후보를 고른다.
+- Region 구성: 16×16 banks를 4×4 spatial regions로 분할함
+- Regional mux: packet 끝(`last`)까지 선택 bank를 고정함
+- Buffer: regional mux 출력을 2-entry elastic buffer에 저장함
+- Root mux: 동일한 packet lock을 적용해 bank packet 간 interleave를 방지함
+- Arbitration: 각 arbitration point에서 round-robin pointer로 다음 packet을 선택함
 
 ## Architectural limits
 
-- 지속 처리량은 16-bit word/clock인 single global link로 제한된다.
-- tile pending depth는 1이다. source가 ready를 무시하면 event를 수용하지 않는다.
-- BANK delta 범위는 0..31 clocks다.
-- timestamp wrap-around에 대한 oldest/min/max 판단은 별도 제한 사항이다.
-- 1000x 이상 overload에서는 더 많은 event를 수용하는 대신 pending queue가
-  커져 RAW보다 P99 latency가 높아질 수 있다.
+- 지속 처리량: 16-bit word/clock인 single global link로 제한됨
+- Tile pending depth: 1임. Source가 `ready`를 무시하면 해당 event를 수용하지 못함
+- BANK delta 범위: 0..31 clocks임
+- Timestamp wrap-around: oldest/min/max 판단에 대한 별도 검증 필요함
+- 1000× 이상 overload: accepted event 증가와 함께 queue가 길어져 RAW보다 P99 latency가 높아질 수 있음
