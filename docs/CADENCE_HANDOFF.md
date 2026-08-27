@@ -1,11 +1,16 @@
 # Cadence Handoff
 
-## Status: READY FOR CADENCE EVALUATION
+## Status: CADENCE EVALUATION IN PROGRESS
 
-Cadence Xcelium, Genus and Innovus were not executed. Current
-SPARSE/ROW/BANK는 7-speed UZH sweep에서 RAW 대비 28.45~33.24%의 일관된
-words/accepted-event 감소를 보였고, 9/9 dataset RTL round-trip과 5/5 functional
-regression을 통과했다. 따라서 다음 단계에서 PPA를 평가할 가치가 있다.
+Current SPARSE/ROW/BANK의 local 기능·traffic gate 통과 상태임.
+
+- 7-speed UZH: RAW 대비 words/accepted-event 28.45~33.24% 감소
+- Functional XSim: 5/5 PASS
+- Dataset XSim/round-trip: 9/9 PASS
+- Unintended loss: 0
+- Cadence Xcelium representative compatibility: PASS
+- Current full Genus: 2026-08-27 KST 기준 실행 중, Area/Timing/Power 미확정
+- Innovus/P&R: 미수행
 
 Candidate handoff:
 
@@ -19,10 +24,43 @@ Candidate handoff:
 | Activity | UZH 1000x sparse/dense/burst vectors under `data/generated` |
 | Comparisons | pinned Fair RAW, pinned Team second, Current |
 | Functional evidence | 5/5 regression, 9/9 dataset XSim/round-trip, unintended loss 0 |
-| RTL candidate basis | `41292b5ca307f18b8d6e5730f1cd0b3335757629` |
+| RTL candidate basis | `ad8fbd05b88e4645847dc438a5f3be668998882c` |
 
-PPA 결과에서는 SPARSE cost-analysis logic의 area/timing/power overhead를 Fair RAW와
-pinned Team reference에 대해 비교한다. 또한 1000x 이상에서 Current가 더 많은
-event를 수용하지만 P99가 RAW보다 높은 throughput-latency trade-off를 숨기지
-않는다. UZH 외 dataset generality와 timestamp wrap-around/formal 검증은 별도
-후속 항목이다. 이 문서는 실행 조건만 정리하며 Cadence command를 실행하지 않는다.
+## Xcelium representative result
+
+| Test | Result |
+|---|---|
+| SPARSE directed | PASS, `AER_BANK_PACKETIZER_TB_PASS` |
+| 128×128 smoke | PASS, `AER_128_SMOKE_PASS`, packets=2, words=5 |
+| Dense dataset | PASS, accepted=649, output words=1,298 |
+| Dense round-trip | PASS, 649/649, mismatch=0 |
+
+- Xcelium version: `23.09-s013`
+- 목적: Cadence simulator compile/elaboration/simulation 호환성 확인
+- Local 7-speed regression 반복 용도 아님
+
+## Genus comparison condition
+
+| Item | Condition |
+|---|---|
+| Genus | `23.14-s090_1` |
+| Technology | GSCLIB 45nm |
+| Library | `slow_vdd1v0_basicCells.lib`, `slow_vdd1v0` |
+| PVT | 0.9V / 125°C |
+| Clock | 10ns / 100MHz |
+| Clock uncertainty | 0.2ns |
+| Current top | `aer_top_128` |
+| Filelist | `rtl/filelist.f` |
+
+Current full Genus는 문서 정리 시점에 진행 중임. 최종 report 생성 전까지 Area,
+WNS, cell count 또는 Power를 확정값으로 기록하지 않음.
+
+최종 PPA 분석 원칙:
+
+- SPARSE cost-analysis logic의 Area/Timing/Power overhead 공개
+- Team pinned result와 library/PVT/constraint 일치 여부 확인
+- 1000x 이상 throughput-latency trade-off 병기
+- 직접 comparable하지 않은 수치의 동일 조건 비교 금지
+- UZH 외 dataset generality, timestamp wrap-around, formal proof는 후속 항목
+- Genus 결과 확인 전 architecture 변경 금지
+- Innovus/P&R은 별도 승인 전 미수행
