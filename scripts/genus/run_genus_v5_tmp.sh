@@ -7,7 +7,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 : "${AER_GENUS_SERVER_SETUP_TCL:?Set to the exact verified V4/V3 server setup fragment}"
 : "${AER_GENUS_V3_IO_CONSTRAINTS_TCL:?Set to the exact verified V4/V3 I/O constraint fragment}"
 
-genus_bin="${AER_GENUS_BIN:-genus}"
+genus_bin="${AER_GENUS_BIN:-/home/tools/cadence/DDI231/bin/genus}"
 if ! command -v "${genus_bin}" >/dev/null 2>&1; then
     echo "Genus executable not found: ${genus_bin}" >&2
     exit 2
@@ -60,7 +60,14 @@ echo "AER_GENUS_V5_RUN_DIR ${run_dir}"
 echo "AER_GENUS_V5_HOME ${HOME}"
 echo "AER_GENUS_V5_TMPDIR ${TMPDIR}"
 
+ulimit -c 0
 cd "${run_dir}/work"
-"${genus_bin}" -f "${repo_root}/scripts/genus/genus_v5_full.tcl" 2>&1 |
+set +e
+"${genus_bin}" \
+    -no_gui \
+    -files "${repo_root}/scripts/genus/genus_v5_full.tcl" \
+    -log "${run_dir}/logs/genus" 2>&1 |
     tee "${run_dir}/logs/genus_console.log"
-exit "${PIPESTATUS[0]}"
+genus_status="${PIPESTATUS[0]}"
+set -e
+exit "${genus_status}"

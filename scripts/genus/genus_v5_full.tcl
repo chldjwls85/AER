@@ -138,7 +138,12 @@ stage_start report
 report_area > [file join $REPORT_DIR "area.rpt"]
 report_timing -max_paths 10 > [file join $REPORT_DIR "timing.rpt"]
 report_qor > [file join $REPORT_DIR "qor.rpt"]
-report_power > [file join $REPORT_DIR "power.rpt"]
+set power_report [file join $REPORT_DIR "power.rpt"]
+if {[catch {report_power > $power_report} power_error]} {
+    puts "AER_POWER_NOT_COMPLETED $power_error"
+} else {
+    puts "AER_POWER_PASS vectorless_default_activity"
+}
 write_hdl > [file join $NETLIST_DIR "aer_top_v5_128_mapped.v"]
 write_sdc > [file join $NETLIST_DIR "aer_top_v5_128_mapped.sdc"]
 stage_done report
