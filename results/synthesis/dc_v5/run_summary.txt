@@ -1,0 +1,11 @@
+flow=v5
+top=aer_top_v5_128
+tool=Synopsys Design Compiler V-2023.12-SP4
+library=/home/KNUEEhdd1/idec/techfiles/saed28edk/saed32hvt_ff0p95v125c.db
+corner=SAED32 HVT FF 0.95V 125C
+clock_period_ns=10.0
+clock_uncertainty_ns=0.2
+compile_command=compile
+start_timestamp=2026-08-28 04:24:02 KST
+end_timestamp=2026-08-28 05:14:47 KST
+elapsed_seconds=3045
