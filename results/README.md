@@ -8,7 +8,7 @@
 - `logs/`: XSim regression과 dataset summary를 저장함.
 - `summary.csv`의 `Current`는 V3 full-evaluation 당시 명칭임.
 
-## V5 synthesis
+## V5 Synthesis
 
 ### Research DC
 
@@ -22,30 +22,42 @@
 
 핵심 결과:
 
-- Critical Path 25.26 ns
-- WNS -15.49 ns
-- TNS -770,141.69 ns
-- Design Area 3,502,284.69
-- Runtime 3,045 s
+- Critical Path: 25.26 ns
+- WNS: -15.49 ns
+- TNS: -770,141.69 ns
+- Design Area: 3,502,284.69
+- Runtime: 3,045 s
+
+연구실 원본 report 기준으로 V4의 global timestamp distribution worst path가 V5에서 제거되고, bank-local `pending_reg → sparse_pixel_reg`가 다음 critical path로 이동함을 확인함.
 
 ### Competition Genus
 
 `results/synthesis/genus_v5/`
 
-- `genus_v5_summary.txt`: 실제 완료 run의 original summary임.
-- `results_summary.txt`: 최종 QoR/area/power/timing 핵심 수치를 정리함.
+대회 서버 최종 run에서 생성된 report를 기준으로 결과를 확정함.
 
 핵심 결과:
 
-- 100 MHz Timing **MET**
-- WNS +0.5819 ns
-- TNS 0 ns
-- Violating Paths 0
-- Cell Area 1,590,675.448
-- Power estimate 약 43.84 mW
-- Elapsed Runtime 9,207 s
+- Target Clock: 100 MHz (10 ns)
+- Timing: **MET**
+- WNS: +0.5819 ns
+- TNS: 0 ns
+- Violating Paths: 0
+- Worst Data Path: 9.075 ns
+- Cell Area: 1,590,675.448
+- Power Estimate: 43.84 mW
+- Elapsed Runtime: 9,207 s
 
-> 업로드된 competition archive에는 full raw `area/qor/timing/power` report가 포함되지 않아, original `genus_v5_summary.txt`와 최종 report 수치 summary를 추적함.
+원본 report에서 다음을 추가 확인함.
+
+- `check_design`: unresolved reference 없음, empty module 없음.
+- `area`: 16개 Regional Timebase hierarchy가 각각 존재함.
+- `timing`: worst setup path가 `pending_reg[0] → sparse_pixel_reg[0]`임.
+- `power`: total 0.0438355 W, register 64.99%, logic 35.01%임.
+- console stage: `read_hdl → elaborate → check_design → syn_generic → syn_map → syn_opt → report` 전체 DONE임.
+- `Error:` / `Fatal:` marker 없음.
+
+상세 해석은 `docs/GENUS_V5_RESULTS.md`에 정리함.
 
 ## 문서
 
