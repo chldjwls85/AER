@@ -1,0 +1,16 @@
+Report: V5 DC area summary
+Design: aer_top_v5_128
+Tool: Synopsys Design Compiler V-2023.12-SP4
+
+Number of ports: 203292
+Number of nets: 932474
+Number of cells: 727885
+Number of combinational cells: 613888
+Number of sequential cells: 111609
+Combinational area: 1610137.458716
+Noncombinational area: 737508.122126
+Net Interconnect area: 1154639.112226
+Total cell area: 2347645.580841
+Total area: 3502284.693067
+
+Source: uploaded research-server area.rpt generated 2026-08-28.
