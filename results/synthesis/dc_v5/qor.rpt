@@ -1,0 +1,71 @@
+Information: Updating design information... (UID-85)
+Warning: Design 'aer_top_v5_128' contains 1 high-fanout nets. A fanout number of 1000 will be used for delay calculations involving these nets. (TIM-134)
+ 
+****************************************
+Report : qor
+Design : aer_top_v5_128
+Version: V-2023.12-SP4
+Date   : Fri Aug 28 05:14:25 2026
+****************************************
+
+  Timing Path Group 'clk'
+  -----------------------------------
+  Levels of Logic:             104.00
+  Critical Path Length:         25.26
+  Critical Path Slack:         -15.49
+  Critical Path Clk Period:     10.00
+  Total Negative Slack:    -770141.69
+  No. of Violating Paths:    78304.00
+  Worst Hold Violation:         -0.05
+  Total Hold Violation:       -275.08
+  No. of Hold Violations:     6687.00
+  -----------------------------------
+
+  Cell Count
+  -----------------------------------
+  Hierarchical Cell Count:       1364
+  Hierarchical Port Count:     162311
+  Leaf Cell Count:             725497
+  Buf/Inv Cell Count:          142747
+  Buf Cell Count:               41370
+  Inv Cell Count:              101377
+  CT Buf/Inv Cell Count:            0
+  Combinational Cell Count:    613888
+  Sequential Cell Count:       111609
+  Macro Count:                      0
+  -----------------------------------
+
+  Area
+  -----------------------------------
+  Combinational Area:  1610137.458716
+  Noncombinational Area: 737508.122126
+  Buf/Inv Area:         234278.076363
+  Total Buffer Area:         98788.32
+  Total Inverter Area:      135489.76
+  Macro/Black Box Area:      0.000000
+  Net Area:            1154639.112226
+  -----------------------------------
+  Cell Area:           2347645.580841
+  Design Area:         3502284.693067
+
+  Design Rules
+  -----------------------------------
+  Total Number of Nets:        783747
+  Nets With Violations:             0
+  Max Trans Violations:             0
+  Max Cap Violations:               0
+  -----------------------------------
+
+  Hostname: knuee-srv6
+
+  Compile CPU Statistics
+  -----------------------------------------
+  Resource Sharing:                  893.01
+  Logic Optimization:                459.68
+  Mapping Optimization:              885.51
+  -----------------------------------------
+  Overall Compile Time:             2895.42
+  Overall Compile Wall Clock Time:  2913.28
+
+  Design  WNS: 15.49  TNS: 770141.69  Number of Violating Paths: 78304
+  Design (Hold)  WNS: 0.05  TNS: 275.08  Number of Violating Paths: 6687
