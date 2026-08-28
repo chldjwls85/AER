@@ -34,7 +34,17 @@
 
 `results/synthesis/genus_v5/`
 
-대회 서버 최종 run에서 생성된 report를 기준으로 결과를 확정함.
+실제 대회 서버 최종 run의 report bundle을 직접 확인한 뒤 결과를 확정함.
+
+보존 파일:
+
+- `genus_v5_summary.txt`: 실제 run summary임.
+- `check_design.rpt`: 원본 check-design report임.
+- `qor.rpt`: 원본 QoR report임.
+- `power.rpt`: 원본 power report임.
+- `area_summary.rpt`: 원본 `area.rpt`에서 top-level area와 16 Regional Timebase hierarchy 근거를 추출함.
+- `timing_worst_path.rpt`: 원본 `timing.rpt`의 worst setup path를 추출함.
+- `source_manifest.txt`: 전달받은 full-report archive와 각 원본 파일의 SHA-256을 기록함.
 
 핵심 결과:
 
@@ -48,14 +58,14 @@
 - Power Estimate: 43.84 mW
 - Elapsed Runtime: 9,207 s
 
-원본 report에서 다음을 추가 확인함.
+추가 확인:
 
-- `check_design`: unresolved reference 없음, empty module 없음.
-- `area`: 16개 Regional Timebase hierarchy가 각각 존재함.
-- `timing`: worst setup path가 `pending_reg[0] → sparse_pixel_reg[0]`임.
-- `power`: total 0.0438355 W, register 64.99%, logic 35.01%임.
-- console stage: `read_hdl → elaborate → check_design → syn_generic → syn_map → syn_opt → report` 전체 DONE임.
-- `Error:` / `Fatal:` marker 없음.
+- unresolved reference 없음.
+- empty module 없음.
+- 16개 Regional Timebase hierarchy가 합성 결과에 유지됨.
+- worst setup path는 `pending_reg[0] → sparse_pixel_reg[0]`임.
+- V4의 global timestamp distribution은 최종 worst path에서 제외됨.
+- console 기준 전체 synthesis stage 완료 및 `Error:` / `Fatal:` marker 없음.
 
 상세 해석은 `docs/GENUS_V5_RESULTS.md`에 정리함.
 
