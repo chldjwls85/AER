@@ -1,0 +1,18 @@
+AER V5 Genus full synthesis
+run_tag=20260827_195845
+top=aer_top_v5_128
+technology=GSCLIB_45nm
+library=slow_vdd1v0_basicCells.lib / slow_vdd1v0
+pvt=0.9V_125C
+clock_period_ns=10.000
+clock_uncertainty_ns=0.200
+server_setup_tcl=/tmp/aiasic26230_aer_genus_v5_cfg_167663/server_setup.tcl
+v3_io_constraints_tcl=/tmp/aiasic26230_aer_genus_v5_cfg_167663/io_constraints.tcl
+power_method=POWER_METHOD_REQUIRES_EXISTING_SERVER_SETUP
+area_report=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663/reports/area.rpt
+timing_report=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663/reports/timing.rpt
+qor_report=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663/reports/qor.rpt
+power_report=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663/reports/power.rpt
+netlist=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663/out/aer_top_v5_128_mapped.v
+sdc=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663/out/aer_top_v5_128_mapped.sdc
+AER_GENUS_V5_FULL_SYNTHESIS_DONE
