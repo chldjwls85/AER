@@ -2,101 +2,114 @@
 
 ## 1. 목적
 
-- V5 `aer_top_v5_128`을 대회 서버의 Cadence Genus 환경에서 full synthesis함.
-- V4의 SPARSE/ROW packet architecture와 hierarchical readout을 유지하고, V5에서 적용한 16개 Regional Timebase가 실제 합성에서 유지되는지 확인함.
-- 100 MHz constraint에서 최종 timing/area/power estimate를 확인함.
+- 최종 Proposed AER인 V5 `aer_top_v5_128`의 대회 서버 Logic Synthesis 결과를 기록함.
+- 100 MHz constraint에서 timing closure 여부와 area/power estimate를 확인함.
+- Regional Timebase 적용 후 실제 critical path가 어디로 이동했는지 확인함.
 
-## 2. 실행 조건
+## 2. 합성 조건
 
 | 항목 | 조건 |
 |---|---|
 | Tool | Cadence Genus 23.14-s090_1 |
 | Top | `aer_top_v5_128` |
+| Technology | GSCLIB 45 nm |
 | Library | `slow_vdd1v0_basicCells.lib` |
-| Technology | GSCLIB045 |
 | PVT | 0.9 V / 125°C |
 | Clock | 10.000 ns (100 MHz) |
-| Clock uncertainty | 0.200 ns |
-| Reset | `rst_n` false path |
-| Effort | `syn_generic/map/opt = medium` |
-| Run directory | `/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663` |
+| Clock Uncertainty | 0.200 ns |
 
-- 실행은 기존 run과 분리된 user-specific `/tmp` directory에서 수행함.
-- `HOME/TMPDIR/TMP/TEMP`를 run directory 내부로 격리함.
-- `dont_touch`, `preserve`, `keep` attribute를 추가하지 않은 clean synthesis임.
+`check_design.rpt`에서 unresolved reference와 empty module이 없음을 확인함.
 
-## 3. Stage 완료
+## 3. Timing 결과
 
-| Stage | 결과 | 시간 |
-|---|---|---:|
-| read_hdl | DONE | 0 s |
-| elaborate | DONE | 281 s |
-| check_design | DONE | 0 s |
-| syn_generic | DONE | 5,795 s |
-| syn_map | DONE | 2,717 s |
-| syn_opt | DONE | 357 s |
-| report | DONE | 132 s |
-
-- 전체 marker `AER_GENUS_V5_FULL_SYNTHESIS_DONE`을 확인함.
-- QoR report의 elapsed runtime은 9,207 s임.
-- 최종 console에서 실제 `Error:`/`Fatal:` marker는 확인되지 않음.
-
-## 4. Timing
+`qor.rpt`와 `timing.rpt` 기준 결과임.
 
 | 항목 | 결과 |
 |---|---:|
-| Target | 100 MHz |
+| Target Clock | 100 MHz |
+| Timing Status | **MET** |
 | WNS | **+0.5819 ns** |
-| TNS | **0.0 ns** |
+| TNS | **0 ns** |
 | Violating Paths | **0** |
-| Timing status | **MET** |
-| Worst data path | 9.075 ns |
+| Worst Data Path | **9.075 ns** |
 
 Worst setup path는 다음과 같음.
 
 ```text
+Startpoint : top_i/gen_bank[184].bank_packetizer_i/pending_reg[0]
+Endpoint   : top_i/gen_bank[184].bank_packetizer_i/sparse_pixel_reg[0]
+
 pending_reg[0]
-  -> bank packetizer internal analysis/selection logic
-  -> sparse_pixel_reg[0]
+  → bank packetizer internal analysis / selection logic
+  → sparse_pixel_reg[0]
 ```
 
-- Startpoint: `top_i/gen_bank[184].bank_packetizer_i/pending_reg[0]`
-- Endpoint: `top_i/gen_bank[184].bank_packetizer_i/sparse_pixel_reg[0]`
-- V4에서 문제였던 global timestamp distribution이 최종 worst path에 나타나지 않음.
-- 연구실 DC V5에서도 `pending_reg -> sparse_pixel_reg`가 worst path로 확인되어 서로 다른 tool/library에서 다음 bank-local bottleneck이 동일하게 관찰됨.
+- 10 ns target에서 +0.5819 ns timing margin을 확보함.
+- V4에서 확인된 global timestamp distribution 경로는 최종 worst path에 나타나지 않음.
+- 새로운 critical path는 Bank Packetizer 내부 analyze/selection 경로로 이동함.
+- 현재 WNS를 단순 환산하면 약 106 MHz 수준의 Fmax가 추정되지만, 별도 clock sweep 결과가 아니므로 확정 Fmax로 사용하지 않음.
 
-## 5. Area / Cell
+## 4. Area / Cell 결과
+
+`area.rpt`와 `qor.rpt` 기준 결과임.
 
 | 항목 | 결과 |
 |---|---:|
-| Leaf instances | 552,073 |
-| Sequential instances | 111,609 |
-| Combinational instances | 440,464 |
-| Hierarchical instances | 298 |
+| Leaf Instances | 552,073 |
+| Sequential Instances | 111,609 |
+| Combinational Instances | 440,464 |
+| Hierarchical Instances | 298 |
 | Cell Area | **1,590,675.448** |
 
-- Area report에서 16개의 `gen_regional_timebase[*].regional_timebase_i` hierarchy가 확인됨.
-- 따라서 Regional Timebase가 합성 과정에서 하나의 counter로 단순 merge된 것으로 보이지 않음.
-- Genus 절대 area는 연구실 DC SAED32 area와 직접 비교하지 않음. Library/technology/optimization flow가 다르기 때문임.
+- Area report에서 `gen_regional_timebase[0]`부터 `[15]`까지 16개 Regional Timebase hierarchy가 각각 확인됨.
+- 따라서 V5의 16개 Regional Timebase가 합성 결과에 유지됨을 확인함.
 
-## 6. Power
+## 5. Power 결과
 
-- Genus `report_power` 결과: **0.0438355 W ≈ 43.84 mW**임.
-- Register category 약 64.99%, logic category 약 35.01%임.
-- 해당 값은 synthesis 단계의 vectorless/default-activity estimate임.
-- CTS, routing, extracted parasitic, real workload switching activity를 반영한 signoff power가 아니므로 참고값으로만 사용함.
+`power.rpt` 기준 결과임.
 
-## 7. 결론
+| 항목 | 결과 |
+|---|---:|
+| Total Power | **0.0438355 W ≈ 43.84 mW** |
+| Register | 28.4872 mW (64.99%) |
+| Logic | 15.3483 mW (35.01%) |
 
-- V5는 대회 Genus 환경에서 **100 MHz timing constraint를 만족함**.
-- WNS +0.5819 ns, TNS 0 ns, violating path 0으로 확인함.
-- Regional Timebase 16개가 hierarchy에 유지됨.
-- Timestamp fan-out은 worst path에서 제외되고 bank-local `pending_reg -> sparse_pixel_reg` 경로가 다음 timing bottleneck으로 이동함.
-- V5의 packet behavior는 V4와 equivalence verification으로 동일성을 확인한 상태이므로, V5는 최종 Proposed AER 후보로 사용할 수 있음.
+- 해당 값은 Logic Synthesis 단계의 power estimate임.
+- 실제 workload switching activity, CTS, routing, extracted parasitic을 반영한 post-layout signoff power가 아니므로 참고값으로 사용함.
 
-## 8. 결과 파일
+## 6. Run 완료 확인
 
-- `results/synthesis/genus_v5/genus_v5_summary.txt`
-- `results/synthesis/genus_v5/results_summary.txt`
+실제 `genus_console.log`에서 다음 전체 stage 완료를 확인함.
 
-> 업로드된 대회 ZIP에는 full `area.rpt/qor.rpt/timing.rpt/power.rpt` 원본이 포함되지 않았으므로 GitHub에는 제공된 원본 summary와 최종 report 수치를 정리한 summary를 보존함.
+- `read_hdl` DONE
+- `elaborate` DONE
+- `check_design` DONE
+- `syn_generic` DONE
+- `syn_map` DONE
+- `syn_opt` DONE
+- `report` DONE
+- `AER_GENUS_V5_FULL_SYNTHESIS_DONE` 확인함.
+- `Error:` / `Fatal:` marker는 확인되지 않음.
+
+QoR report 기준 elapsed runtime은 **9,207 s**임.
+
+## 7. 최종 해석
+
+- V5 Proposed AER는 대회 Genus 환경에서 **100 MHz timing constraint를 만족함**.
+- WNS +0.5819 ns, TNS 0 ns, violating path 0을 확인함.
+- Regional Timebase 적용 후 timestamp fan-out이 최종 critical path에서 제외됨.
+- 연구실 DC와 대회 Genus 모두 V5에서 `pending_reg → sparse_pixel_reg`를 다음 bank-local bottleneck으로 확인함.
+- 따라서 Regional Timebase는 기존 timestamp distribution 병목을 제거하는 방향으로 유효했음을 확인함.
+
+## 8. 원본 결과 파일
+
+`results/synthesis/genus_v5/`에 실제 대회 서버에서 가져온 원본 report를 보존함.
+
+- `genus_v5_summary.txt`
+- `area.rpt`
+- `check_design.rpt`
+- `power.rpt`
+- `qor.rpt`
+- `timing.rpt`
+
+대용량 console log는 repository에 중복 보존하지 않고, stage 완료 여부와 Error/Fatal 유무만 본 문서에 기록함.
