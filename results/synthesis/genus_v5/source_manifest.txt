@@ -1,0 +1,16 @@
+AER V5 Genus full-report source manifest
+
+source_archive=v5_genus_full_reports.tar.gz
+source_archive_sha256=3a5b3f6d41621cb8b2d1248b351ffb886bc78acb3a54cd2d47c7d1786f572c00
+run_dir=/tmp/aiasic26230_aer_genus_v5_20260827_195845_167663
+
+files:
+genus_v5_summary.txt  size=962    sha256=e6534e33032eaff10fcb81f78935ee07672cbe7911989e056569a9e754d5cdef
+reports/area.rpt       size=51978  sha256=cba2e30f75a2cebe3cdf74633e15f977c1dda5cc7cdcd94b3ecff12dda0a6d63
+reports/check_design.rpt size=259  sha256=b34d89f6c7bbe6ef2b8fa86e39d645f8d40265af451d797f8a78975794ee37b6
+reports/power.rpt      size=1208   sha256=6f72298dd1d3ba92c6550f04b8dd89addc55a0d1774b54eaf9e75be309f2f708
+reports/qor.rpt        size=1680   sha256=38612e3c0a691175733adece90d22f8654dad175aa9397dddc64a3f8db79344b
+reports/timing.rpt     size=105589 sha256=e6d22ac3f43c7f8e7236b94b812bfba7e4f807bfbbc4cc9c2eae9b0b265bd4d8
+logs/genus_console.log size=234763 sha256=f237dae0770dc60eb7c7675ba1365ce3314f4b5f4c2aa1d864fe6fe240c4233f
+
+The final documentation was regenerated from these reports. Script/handoff notes are not treated as result evidence.
