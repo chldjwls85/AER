@@ -1,25 +1,54 @@
 # Results
 
-> 명칭 주의: `summary.csv`와 `xsim_current_adaptive_*`의 `Current`는 V3를 의미함.
-> V4 full UZH sweep 결과는 포함하지 않음.
+## Dataset / traffic
 
-- 목적: 재현 가능한 소형 summary와 대표 media만 Git으로 관리함
-- 제외 대상: raw dataset, XSim build tree, wave database, 정리되지 않은 log임
+- `summary.csv`: RAW/Team/V3 dataset metrics를 저장함.
+- `metrics/`: compact JSON measurements와 조건을 저장함.
+- `figures/`: representative comparison plot을 저장함.
+- `logs/`: XSim regression과 dataset summary를 저장함.
+- `summary.csv`의 `Current`는 V3 full-evaluation 당시 명칭임.
 
-- `summary.csv`: machine-readable cross-design dataset metrics
-- `metrics/`: compact JSON measurements and experiment conditions
-- `figures/`: representative static comparisons and performance plots
-- `animations/`: representative event-flow animation
-- `logs/regression_summary.txt`: curated XSim regression result
-- `logs/dataset_xsim_summary.txt`: nine representative RTL runs
-- `logs/evaluation_summary.txt`: compact decision evidence
+## V5 synthesis
 
-- Full sweep: `summary.csv`에 RAW/Team/Current 결과를 저장함
-- Representative window: `metrics/xsim_*.json`에 accepted/decoded count를 저장함
+### Research DC
 
-- 당시 final status: `READY FOR CADENCE EVALUATION`임
-- UZH 결과: 7-speed full sweep 완료함
-- RTL 결과: representative round-trip 9/9 PASS함
-- Unintended loss: 0임
-- Cadence tool: 이 results set 생성 단계에서는 실행하지 않음
-- 이후 V3/V4 최종 상태: `docs/AER_V3_V4_DESIGN_EVOLUTION.md` 참조 필요함
+`results/synthesis/dc_v5/`
+
+- `run_summary.txt`
+- `qor.rpt`
+- `area_summary.rpt`
+- `timing_summary.rpt`
+- `check_design_summary.txt`
+
+핵심 결과:
+
+- Critical Path 25.26 ns
+- WNS -15.49 ns
+- TNS -770,141.69 ns
+- Design Area 3,502,284.69
+- Runtime 3,045 s
+
+### Competition Genus
+
+`results/synthesis/genus_v5/`
+
+- `genus_v5_summary.txt`: 실제 완료 run의 original summary임.
+- `results_summary.txt`: 최종 QoR/area/power/timing 핵심 수치를 정리함.
+
+핵심 결과:
+
+- 100 MHz Timing **MET**
+- WNS +0.5819 ns
+- TNS 0 ns
+- Violating Paths 0
+- Cell Area 1,590,675.448
+- Power estimate 약 43.84 mW
+- Elapsed Runtime 9,207 s
+
+> 업로드된 competition archive에는 full raw `area/qor/timing/power` report가 포함되지 않아, original `genus_v5_summary.txt`와 최종 report 수치 summary를 추적함.
+
+## 문서
+
+- 설계 진화: `docs/AER_V3_V5_DESIGN_EVOLUTION.md`
+- 연구실 DC 비교: `docs/DC_SAED32_COMPARISON.md`
+- 대회 Genus 결과: `docs/GENUS_V5_RESULTS.md`
