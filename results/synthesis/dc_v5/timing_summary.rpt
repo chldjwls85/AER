@@ -1,0 +1,23 @@
+Report: V5 DC timing summary
+Design: aer_top_v5_128
+Tool: Synopsys Design Compiler V-2023.12-SP4
+Operating Conditions: ff0p95v125c
+Clock period: 10.0 ns
+Clock uncertainty: 0.2 ns
+
+Critical Path Length: 25.26 ns
+WNS: -15.49 ns
+TNS: -770141.69 ns
+Violating Paths: 78304
+
+Worst setup path
+Startpoint: top_i/gen_bank[232].bank_packetizer_i/pending_reg[0]
+Endpoint: top_i/gen_bank[232].bank_packetizer_i/sparse_pixel_reg[0]
+Path Group: clk
+Path Type: max
+
+Interpretation
+- V4의 global timestamp distribution path가 V5 worst path에서 제거됨.
+- 다음 bottleneck은 bank packetizer 내부 pending_reg -> sparse_pixel_reg 경로임.
+
+Source: uploaded research-server timing.rpt generated 2026-08-28.
