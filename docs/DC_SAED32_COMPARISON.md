@@ -1,46 +1,78 @@
-# Synopsys DC SAED32 V3/V4 comparison
+# Synopsys DC SAED32 V3/V4/V5 comparison
 
-- 목적: 동일한 연구실 Synopsys Design Compiler/SAED32 조건에서 V3와 V4를 상대 비교함
-- 용도: synthesis runtime, Area, Timing의 보조 structural screening임
-- 공식성: 대회 공식 Genus/PPA flow가 아님
-- 주의: SAED32 절대 PPA를 대회 공식 결과로 사용하면 안 됨
+## 목적
 
-## Fixed comparison conditions
+- 동일 연구실 Synopsys DC/SAED32 조건에서 architecture iteration을 상대 비교함.
+- 공식 대회 PPA 결과가 아니라 structural/timing screening 용도임.
+- 대회 Genus 절대값과 직접 비교하지 않음.
+
+## Fixed conditions
 
 - Tool: Synopsys Design Compiler V-2023.12-SP4
-- Library: `/home/KNUEEhdd1/idec/techfiles/saed28edk/saed32hvt_ff0p95v125c.db`
-- Corner: SAED32 HVT FF, 0.95 V, 125 C
-- Clock: 10.0 ns (100 MHz)
+- Library: `saed32hvt_ff0p95v125c.db`
+- Corner: SAED32 HVT FF, 0.95 V, 125°C
+- Clock: 10.0 ns
 - Clock uncertainty: 0.2 ns
-- Reset constraint: `set_false_path -from [get_ports rst_n]`
-- HDL parser: `analyze -format sverilog`, followed by `elaborate` and `link`
-- Optimization: basic `compile` for both versions
-- V3 top/filelist: `aer_top_128`, `rtl/filelist.f`
-- V4 top/filelist: `aer_top_v4_128`, `rtl/filelist_v4.f`
+- Reset: `set_false_path -from [get_ports rst_n]`
+- Optimization: basic `compile`
+- Common flow: `scripts/dc/dc_common.tcl`
 
-- 공통 flow: `scripts/dc/dc_common.tcl` 사용함
-- 동일 조건: library, constraint, optimization, report command가 V3/V4에서 동일함
-- 유일한 차이: top module과 RTL filelist임
+## V4 → V5 결과
 
-## Server boundary and outputs
+| 항목 | V4 | V5 | 변화 |
+|---|---:|---:|---:|
+| Critical Path | 28.05 ns | **25.26 ns** | **-9.9%** |
+| WNS | -18.27 ns | **-15.49 ns** | +2.78 ns |
+| TNS | -1,058,885.12 ns | **-770,141.69 ns** | 약 27.3% 감소 |
+| Violating Paths | 77,829 | 78,304 | +0.6% |
+| Leaf Cells | 724,826 | 725,497 | +0.09% |
+| Combinational Cells | 613,457 | 613,888 | +0.07% |
+| Sequential Cells | 111,369 | **111,609** | **+240** |
+| Cell Area | 2,359,467.60 | **2,347,645.58** | -0.50% |
+| Design Area | 3,511,071.11 | **3,502,284.69** | -0.25% |
+| Runtime | 2,776 s | **3,045 s** | +9.7% |
 
-Repository root는 다음 경로로 고정함.
+- V5 sequential +240은 추가 15 timebases × 16 bit와 일치함.
+- V5 area가 소폭 감소했으나 원인은 report만으로 단정하지 않음.
+- Regional Timebase 도입에 따른 유의미한 area penalty가 관찰되지 않았다고 판단함.
 
-`/home/KNUEEhdd1/kimdo904/02-dc/hyeonho`
+## Critical path migration
 
-- 위치 보호: Tcl과 launcher가 다른 repository root를 거부함
-- 수정 금지: `/01-aes`, `/04-aer`, `/05-aer_ej` 등 기존 server workspace 사용 금지함
-- 출력 분리: `dc_results/v3/`, `dc_results/v4/`에 각각 저장함
-- 기록 항목: console log, start/end/elapsed time, pre/post `check_design`, QoR, Area, Timing임
-- 생성물: mapped Verilog와 generated SDC임
-- Git 정책: `dc_results/`는 추적하지 않음
+V4:
 
-## Run
-
-연구실 server의 repository root에서 다음 명령을 실행함.
-
-```csh
-chmod +x scripts/dc/run_dc_v3.csh scripts/dc/run_dc_v4.csh
-./scripts/dc/run_dc_v3.csh
-./scripts/dc/run_dc_v4.csh
+```text
+global aer_timebase
+  -> global time_now distribution
+  -> bank capture logic
+  -> stored_time_reg
 ```
+
+V5:
+
+```text
+pending_reg
+  -> bank packetizer internal analysis/selection
+  -> sparse_pixel_reg
+```
+
+- timestamp distribution path가 V5 worst path에서 사라짐.
+- Regional Timebase가 목표한 global timestamp fan-out bottleneck을 제거함.
+- bank-local analyze/selection path가 다음 bottleneck으로 드러남.
+
+## V5 reports
+
+`results/synthesis/dc_v5/`
+
+- `run_summary.txt`
+- `qor.rpt`
+- `area_summary.rpt`
+- `timing_summary.rpt`
+- `check_design_summary.txt`
+
+## V5 run facts
+
+- Start: 2026-08-28 04:24:02 KST
+- End: 2026-08-28 05:14:47 KST
+- Elapsed: 3,045 s
+- Top: `aer_top_v5_128`
+- `check_design` raw reports에는 repetitive lint warnings가 존재하나 synthesis error는 확인되지 않음.
