@@ -22,7 +22,7 @@
 
 ## 3. Timing 결과
 
-`qor.rpt`와 `timing.rpt` 기준 결과임.
+`qor.rpt`와 원본 `timing.rpt` 기준 결과임.
 
 | 항목 | 결과 |
 |---|---:|
@@ -61,7 +61,7 @@ pending_reg[0]
 | Hierarchical Instances | 298 |
 | Cell Area | **1,590,675.448** |
 
-- Area report에서 `gen_regional_timebase[0]`부터 `[15]`까지 16개 Regional Timebase hierarchy가 각각 확인됨.
+- 원본 `area.rpt`에서 `gen_regional_timebase[0]`부터 `[15]`까지 16개 Regional Timebase hierarchy가 각각 확인됨.
 - 따라서 V5의 16개 Regional Timebase가 합성 결과에 유지됨을 확인함.
 
 ## 5. Power 결과
@@ -101,15 +101,16 @@ QoR report 기준 elapsed runtime은 **9,207 s**임.
 - 연구실 DC와 대회 Genus 모두 V5에서 `pending_reg → sparse_pixel_reg`를 다음 bank-local bottleneck으로 확인함.
 - 따라서 Regional Timebase는 기존 timestamp distribution 병목을 제거하는 방향으로 유효했음을 확인함.
 
-## 8. 원본 결과 파일
+## 8. 결과 근거
 
-`results/synthesis/genus_v5/`에 실제 대회 서버에서 가져온 원본 report를 보존함.
+`results/synthesis/genus_v5/`에 최종 report 근거를 보존함.
 
-- `genus_v5_summary.txt`
-- `area.rpt`
-- `check_design.rpt`
-- `power.rpt`
-- `qor.rpt`
-- `timing.rpt`
+- `genus_v5_summary.txt`: 실제 run summary임.
+- `check_design.rpt`: 원본 check-design report임.
+- `qor.rpt`: 원본 QoR report임.
+- `power.rpt`: 원본 power report임.
+- `area_summary.rpt`: 원본 area report에서 top-level area와 16 Regional Timebase hierarchy를 정리함.
+- `timing_worst_path.rpt`: 원본 timing report에서 최악 setup path를 정리함.
+- `source_manifest.txt`: 전달받은 full-report archive와 각 원본 파일의 SHA-256을 기록함.
 
-대용량 console log는 repository에 중복 보존하지 않고, stage 완료 여부와 Error/Fatal 유무만 본 문서에 기록함.
+Full `area.rpt`, `timing.rpt`, `genus_console.log`는 분석에 직접 사용했으며, repository에는 결과 해석에 필요한 근거와 source hash를 보존함.
