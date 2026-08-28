@@ -19,9 +19,9 @@
 
 | 단계 | 핵심 변경 | 판단 |
 |---|---|---|
-| V3 | SPARSE/ROW/BANK adaptive packet | traffic 효율 개선, BANK complexity 대비 실효성 낮음 |
-| V4 | BANK 제거, Lightweight SPARSE/ROW | 기능/전송 구조 단순화, global timestamp fan-out bottleneck 확인 |
-| V5 | 1 global counter → 16 regional counters | timestamp worst path 제거, 대회 Genus 100 MHz timing MET |
+| V3 | SPARSE/ROW/BANK adaptive packet | traffic 효율은 개선했으나 BANK complexity 대비 실효성이 낮음 |
+| V4 | BANK 제거, Lightweight SPARSE/ROW | 구조 단순화 후 global timestamp fan-out bottleneck 확인함 |
+| V5 | 1 global counter → 16 regional counters | timestamp worst path를 제거하고 대회 Genus 100 MHz timing MET 확인함 |
 
 상세 과정: [docs/AER_V3_V5_DESIGN_EVOLUTION.md](docs/AER_V3_V5_DESIGN_EVOLUTION.md)
 
@@ -36,7 +36,7 @@ UZH `shapes_rotation` 기반 평가에서 RAW 대비 word efficiency를 개선�
 | 1000× | 2.9313 | 1.9960 | 31.90% |
 | 5000× | 2.7852 | 1.9928 | 28.45% |
 
-- 1000× accepted events: 46,610 → 63,458로 증가함.
+- 1000× accepted events는 46,610 → 63,458로 증가함.
 - high-load에서는 더 많은 traffic을 수용하면서 P99 latency가 증가하는 trade-off가 존재함.
 - 상세 결과: [docs/DATASET_EVALUATION.md](docs/DATASET_EVALUATION.md)
 
@@ -53,7 +53,7 @@ UZH `shapes_rotation` 기반 평가에서 RAW 대비 word efficiency를 개선�
 
 ## 연구실 DC V4 → V5
 
-동일 Synopsys DC/SAED32/10 ns 조건의 상대 비교임.
+동일 Synopsys DC / SAED32 / 10 ns 조건의 상대 비교임.
 
 | 항목 | V4 | V5 |
 |---|---:|---:|
@@ -65,45 +65,35 @@ UZH `shapes_rotation` 기반 평가에서 RAW 대비 word efficiency를 개선�
 
 - global timestamp distribution이 worst path에서 제거됨.
 - V5 worst path는 bank-local `pending_reg → sparse_pixel_reg`로 이동함.
-- Reports: [results/synthesis/dc_v5/](results/synthesis/dc_v5/)
 - 상세: [docs/DC_SAED32_COMPARISON.md](docs/DC_SAED32_COMPARISON.md)
+- 원본 report: [results/synthesis/dc_v5/](results/synthesis/dc_v5/)
 
 ## 대회 Genus V5 최종 결과
 
-Cadence Genus 23.14-s090_1 / GSCLIB045 slow / 0.9 V / 125°C / 10 ns constraint에서 full synthesis 완료함.
+실제 대회 서버의 최종 Genus report를 기준으로 정리함.
 
 | 항목 | 결과 |
 |---|---:|
+| Target Clock | 100 MHz (10 ns) |
 | Timing | **MET** |
 | WNS | **+0.5819 ns** |
 | TNS | **0 ns** |
 | Violating Paths | **0** |
-| Worst data path | 9.075 ns |
+| Worst Data Path | 9.075 ns |
 | Leaf Instances | 552,073 |
 | Sequential Instances | 111,609 |
-| Cell Area | 1,590,675.448 |
-| Power estimate | 약 43.84 mW |
+| Cell Area | **1,590,675.448** |
+| Power Estimate | **43.84 mW** |
 | Elapsed Runtime | 9,207 s |
 
-- Genus worst path도 `pending_reg → sparse_pixel_reg`로 확인함.
-- Power는 synthesis-stage vectorless/default-activity estimate이며 post-layout signoff 값이 아님.
+- Worst setup path는 `pending_reg[0] → sparse_pixel_reg[0]`로 확인함.
+- V4에서 문제였던 global timestamp distribution은 최종 worst path에 나타나지 않음.
+- Area report에서 16개 Regional Timebase hierarchy가 유지됨을 확인함.
+- Power 값은 synthesis-stage estimate이며 post-layout signoff power가 아님.
 - 상세: [docs/GENUS_V5_RESULTS.md](docs/GENUS_V5_RESULTS.md)
-- Result summary: [results/synthesis/genus_v5/](results/synthesis/genus_v5/)
+- 원본 report: [results/synthesis/genus_v5/](results/synthesis/genus_v5/)
 
-## 주요 RTL
-
-```text
-rtl/aer_top_v5.v
-rtl/filelist_v5.f
-rtl/bank/aer_bank_packetizer_v4.v
-rtl/common/aer_timebase.v
-rtl/common/aer_packet_rr_arbiter.v
-rtl/common/aer_stream_buffer2.v
-rtl/fabric/aer_packet_mux.v
-rtl/fabric/aer_global_readout.v
-```
-
-## 문서
+## 주요 문서
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Packet Format](docs/PACKET_FORMAT.md)
@@ -114,8 +104,8 @@ rtl/fabric/aer_global_readout.v
 - [Genus V5 Results](docs/GENUS_V5_RESULTS.md)
 - [Reference Versions](docs/REFERENCE_VERSIONS.md)
 
-## 주의
+## 결과 해석 주의
 
-- 연구실 DC와 대회 Genus의 절대 area/timing 수치를 서로 직접 비교하지 않음.
+- 연구실 DC와 대회 Genus의 절대 area/timing 수치는 직접 비교하지 않음.
 - 서로 다른 library/technology/optimization flow를 사용하므로 각 환경 내부의 판단 기준으로 사용함.
 - Innovus P&R, extracted RC, post-layout STA/power는 현재 범위에 포함하지 않음.
