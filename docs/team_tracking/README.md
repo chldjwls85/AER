@@ -18,7 +18,8 @@
 - 전용 브랜치: `codex/daily-team-tracking`
 - 보고서 위치: `docs/team_tracking/YYYY-MM-DD.md`
 - 해당 날짜 보고서와 이 디렉터리의 인덱스만 stage한다. 다른 변경은 절대 함께 commit하지 않는다.
-- 실제 변화가 있을 때만 `chore: update team tracking YYYY-MM-DD` 형식으로 commit하고 `origin/codex/daily-team-tracking`에 push한다.
+- 변화가 없는 날도 `변화 없음`을 명시한 날짜별 보고서를 만든다.
+- 날짜별 보고서는 `chore: update team tracking YYYY-MM-DD` 형식으로 commit하고 `origin/codex/daily-team-tracking`에 push한다. 같은 날짜에 다시 실행해 내용이 동일하면 빈 commit은 만들지 않는다.
 
 ## 저장공간 정리 규칙
 
