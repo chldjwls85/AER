@@ -66,11 +66,11 @@ UZH `shapes_rotation` 기반 평가에서 RAW 대비 word efficiency를 개선�
 - global timestamp distribution이 worst path에서 제거됨.
 - V5 worst path는 bank-local `pending_reg → sparse_pixel_reg`로 이동함.
 - 상세: [docs/DC_SAED32_COMPARISON.md](docs/DC_SAED32_COMPARISON.md)
-- 원본 report: [results/synthesis/dc_v5/](results/synthesis/dc_v5/)
+- 결과 근거: [results/synthesis/dc_v5/](results/synthesis/dc_v5/)
 
 ## 대회 Genus V5 최종 결과
 
-실제 대회 서버의 최종 Genus report를 기준으로 정리함.
+실제 대회 서버 최종 report를 기준으로 결과를 확정함.
 
 | 항목 | 결과 |
 |---|---:|
@@ -91,7 +91,7 @@ UZH `shapes_rotation` 기반 평가에서 RAW 대비 word efficiency를 개선�
 - Area report에서 16개 Regional Timebase hierarchy가 유지됨을 확인함.
 - Power 값은 synthesis-stage estimate이며 post-layout signoff power가 아님.
 - 상세: [docs/GENUS_V5_RESULTS.md](docs/GENUS_V5_RESULTS.md)
-- 원본 report: [results/synthesis/genus_v5/](results/synthesis/genus_v5/)
+- 결과 근거: [results/synthesis/genus_v5/](results/synthesis/genus_v5/)
 
 ## 주요 문서
 
